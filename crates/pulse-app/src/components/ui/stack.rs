@@ -1,4 +1,4 @@
-use gpui::{ParentElement, RenderOnce, Styled, div};
+use gpui::{InteractiveElement, ParentElement, RenderOnce, Styled, div};
 
 #[derive(Debug, Clone, Copy)]
 pub enum StackDirection {
@@ -74,6 +74,12 @@ impl Stack {
     pub const fn center(mut self) -> Self {
         self.align = ItemAlignment::Center;
         self.justify = JustifyContent::Center;
+        self
+    }
+
+    #[must_use]
+    pub fn id(mut self, id: impl Into<gpui::ElementId>) -> Self {
+        InteractiveElement::interactivity(&mut self.base_div).element_id = Some(id.into());
         self
     }
 }
