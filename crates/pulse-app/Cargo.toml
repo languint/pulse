@@ -1,0 +1,20 @@
+[package]
+name = "pulse-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gpui.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+tracing-subscriber = "0.3"
+
+pulse-model = { path = "../pulse-model" }
+pulse-audio = { path = "../pulse-audio" }
+pulse-library = { path = "../pulse-library" }
+pulse-theme = { path = "../pulse-theme" }
+
+[lints]
+workspace = true
