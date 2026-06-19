@@ -1,16 +1,19 @@
 use gpui::{ParentElement, RenderOnce, Styled, div};
 
+#[derive(Debug, Clone, Copy)]
 pub enum StackDirection {
     Horizontal,
     Vertical,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ItemAlignment {
     Start,
     Center,
     End,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum JustifyContent {
     Start,
     Center,
@@ -149,5 +152,31 @@ impl RenderOnce for Stack {
         }
 
         stack_div.children(self.children)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::ParentElement;
+
+    use crate::components::ui::stack::{Stack, StackDirection};
+
+    #[test]
+    fn child_builder_adds_children() {
+        let stack = Stack::new(StackDirection::Horizontal)
+            .child("A")
+            .child("B")
+            .child("C");
+
+        assert_eq!(stack.children.len(), 3);
+    }
+
+    #[test]
+    fn children_builder_extends_children() {
+        let stack = Stack::new(StackDirection::Horizontal)
+            .child("A")
+            .children(["B", "C"]);
+
+        assert_eq!(stack.children.len(), 3);
     }
 }

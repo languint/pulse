@@ -19,7 +19,7 @@ test: build
     if [ ! -f Cargo.toml ]; then
       cd {{ invocation_directory() }}
     fi
-    cargo test
+    cargo nextest run
 
 format:
     #!/usr/bin/env bash
