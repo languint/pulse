@@ -3835,6 +3835,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gpui",
+ "pulse-assets",
  "pulse-audio",
  "pulse-library",
  "pulse-model",
@@ -3842,6 +3843,13 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "pulse-assets"
+version = "0.1.0"
+dependencies = [
+ "gpui",
 ]
 
 [[package]]

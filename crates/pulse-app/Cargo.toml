@@ -15,6 +15,7 @@ pulse-model = { path = "../pulse-model" }
 pulse-audio = { path = "../pulse-audio" }
 pulse-library = { path = "../pulse-library" }
 pulse-theme = { path = "../pulse-theme" }
+pulse-assets = { path = "../pulse-assets" }
 
 [lints]
 workspace = true

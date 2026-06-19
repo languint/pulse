@@ -1,10 +1,10 @@
-use gpui::{ParentElement, Styled};
+use gpui::{ParentElement, Styled, div, px};
 
 use crate::config::PulseContext;
 
-pub struct SidebarView;
+pub struct Sidebar;
 
-impl gpui::Render for SidebarView {
+impl gpui::Render for Sidebar {
     fn render(
         &mut self,
         _window: &mut gpui::Window,
@@ -12,8 +12,8 @@ impl gpui::Render for SidebarView {
     ) -> impl gpui::IntoElement {
         let theme = cx.theme();
 
-        gpui::div()
-            .w(gpui::px(260.))
+        div()
+            .w(px(260.))
             .h_full()
             .flex()
             .flex_col()

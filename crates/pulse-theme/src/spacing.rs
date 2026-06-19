@@ -13,7 +13,7 @@ pub struct SpacingTokens {
 
 impl SpacingTokens {
     pub const DEFAULT: Self = {
-        let unit = Rems(4.0);
+        let unit = Rems(0.25);
 
         Self {
             unit,

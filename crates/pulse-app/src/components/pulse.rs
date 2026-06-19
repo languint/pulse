@@ -1,10 +1,13 @@
-use gpui::{AppContext, ParentElement, Styled};
+use gpui::{AppContext, ParentElement, Styled, div};
 
-use crate::{config::PulseContext, views::sidebar::SidebarView};
+use crate::{
+    components::{sidebar::Sidebar, toolbar::Toolbar},
+    config::PulseContext,
+};
 
-pub struct PulseView;
+pub struct Pulse;
 
-impl gpui::Render for PulseView {
+impl gpui::Render for Pulse {
     fn render(
         &mut self,
         _window: &mut gpui::Window,
@@ -12,7 +15,7 @@ impl gpui::Render for PulseView {
     ) -> impl gpui::prelude::IntoElement {
         let theme = cx.theme();
 
-        gpui::div()
+        div()
             .size_full()
             .flex()
             .flex_col()
@@ -20,6 +23,7 @@ impl gpui::Render for PulseView {
             .text_color(theme.colors.text.primary)
             .text_size(theme.typography.body.size)
             .font(theme.typography.font(theme.typography.body))
-            .child(cx.new(|_| SidebarView))
+            .child(cx.new(|_| Toolbar))
+            .child(cx.new(|_| Sidebar))
     }
 }

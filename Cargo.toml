@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pulse-app", "crates/pulse-audio", "crates/pulse-library", "crates/pulse-model", "crates/pulse-theme"]
+members = ["crates/pulse-app", "crates/pulse-assets", "crates/pulse-audio", "crates/pulse-library", "crates/pulse-model", "crates/pulse-theme"]
 
 [workspace.package]
 edition = "2024"
