@@ -1,10 +1,13 @@
 use gpui::{AppContext, Application, UpdateGlobal, WindowOptions};
 
+pub mod actions;
 pub mod components;
 pub mod config;
 pub mod error;
 
+use actions::ToggleFullscreen;
 use components::pulse::Pulse;
+use pulse_keymap::{PulseActionBindings, PulseKeymap};
 
 use crate::config::PulseConfig;
 
@@ -35,9 +38,20 @@ fn main() {
                 ..Default::default()
             };
 
-            if let Err(e) = cx.open_window(window_options, |_, cx| cx.new(|_| Pulse)) {
+            if let Err(e) = cx.open_window(window_options, |window, cx| {
+                let pulse = cx.new(Pulse::new);
+                window.focus(&pulse.read(cx).focus_handle);
+                pulse
+            }) {
                 tracing::error!("failed to open window: {e}");
                 cx.quit();
             }
+
+            PulseKeymap::default().bind(
+                &mut cx,
+                PulseActionBindings {
+                    toggle_fullscreen: ToggleFullscreen,
+                },
+            );
         });
 }

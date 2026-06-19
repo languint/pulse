@@ -3908,6 +3908,7 @@ dependencies = [
  "gpui",
  "pulse-assets",
  "pulse-audio",
+ "pulse-keymap",
  "pulse-library",
  "pulse-model",
  "pulse-theme",
@@ -3927,6 +3928,13 @@ dependencies = [
 [[package]]
 name = "pulse-audio"
 version = "0.1.0"
+
+[[package]]
+name = "pulse-keymap"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+]
 
 [[package]]
 name = "pulse-library"

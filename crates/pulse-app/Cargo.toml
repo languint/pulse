@@ -17,6 +17,7 @@ pulse-audio = { path = "../pulse-audio" }
 pulse-library = { path = "../pulse-library" }
 pulse-theme = { path = "../pulse-theme" }
 pulse-assets = { path = "../pulse-assets" }
+pulse-keymap = { path = "../pulse-keymap" }
 
 [lints]
 workspace = true
