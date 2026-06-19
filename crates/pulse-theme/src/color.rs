@@ -11,10 +11,10 @@ pub struct TextColors {
 impl Default for TextColors {
     fn default() -> Self {
         Self {
-            primary: Hsla::from(rgba(0xccccccff)),
-            secondary: Hsla::from(rgba(0x9d9d9dff)),
-            muted: Hsla::from(rgba(0x6e7681ff)),
-            disabled: Hsla::from(rgba(0xcccccc80)),
+            primary: Hsla::from(rgba(0xcccc_ccff)),
+            secondary: Hsla::from(rgba(0x9d9d_9dff)),
+            muted: Hsla::from(rgba(0x6e76_81ff)),
+            disabled: Hsla::from(rgba(0xcccc_cc80)),
         }
     }
 }
@@ -39,21 +39,22 @@ pub struct ColorTokens {
 }
 
 impl ColorTokens {
+    #[must_use]
     pub fn default_dark() -> Self {
         Self {
-            background: Hsla::from(rgba(0x1f1f1fff)),
-            surface: Hsla::from(rgba(0x181818ff)),
-            surface_variant: Hsla::from(rgba(0x202020ff)),
+            background: Hsla::from(rgba(0x1f1f_1fff)),
+            surface: Hsla::from(rgba(0x1818_18ff)),
+            surface_variant: Hsla::from(rgba(0x2020_20ff)),
 
-            primary: Hsla::from(rgba(0x0078d4ff)),
-            secondary: Hsla::from(rgba(0x179fffff)),
+            primary: Hsla::from(rgba(0x0078_d4ff)),
+            secondary: Hsla::from(rgba(0x179f_ffff)),
 
-            success: Hsla::from(rgba(0x2ea043ff)),
-            warning: Hsla::from(rgba(0xcca700ff)),
-            error: Hsla::from(rgba(0xf14c4cff)),
+            success: Hsla::from(rgba(0x2ea0_43ff)),
+            warning: Hsla::from(rgba(0xcca7_00ff)),
+            error: Hsla::from(rgba(0xf14c_4cff)),
 
-            border: Hsla::from(rgba(0x2b2b2bff)),
-            border_variant: Hsla::from(rgba(0x454545ff)),
+            border: Hsla::from(rgba(0x2b2b_2bff)),
+            border_variant: Hsla::from(rgba(0x4545_45ff)),
 
             text: TextColors::default(),
         }

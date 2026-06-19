@@ -21,7 +21,7 @@ fn main() {
             {
                 tracing::error!("failed to load fonts: {e}");
                 cx.quit();
-            };
+            }
 
             PulseConfig::set_global(
                 &mut cx,

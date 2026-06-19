@@ -2,6 +2,7 @@ use crate::{
     AnimationTokens, ColorTokens, PulseTheme, RadiusTokens, SpacingTokens, TypographyTokens,
 };
 
+#[must_use]
 pub fn pulse_dark() -> PulseTheme {
     PulseTheme {
         name: "Pulse Dark",

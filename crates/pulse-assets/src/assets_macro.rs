@@ -8,14 +8,14 @@ macro_rules! assets {
         }
     ) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub enum Icon {
+        pub enum IconName {
             $(
                 $name,
             )*
         }
 
-        impl Icon {
-            pub fn path(&self) -> &'static str {
+        impl IconName {
+            pub const fn path(&self) -> &'static str {
                 match self {
                     $(
                         Self::$name => concat!("icons/", $path),
@@ -23,7 +23,7 @@ macro_rules! assets {
                 }
             }
 
-            pub fn bytes(&self) -> &'static [u8] {
+            pub const fn bytes(&self) -> &'static [u8] {
                 match self {
                     $(
                         Self::$name => include_bytes!($path),
@@ -41,7 +41,7 @@ macro_rules! assets {
             }
         }
 
-        pub fn list() -> &'static [&'static str] {
+        pub const fn list() -> &'static [&'static str] {
             &[
                 $(
                     concat!("icons/", $path),

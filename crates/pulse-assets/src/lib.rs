@@ -16,14 +16,8 @@ impl AssetSource for PulseAssetSource {
         Ok(asset.map(Cow::Borrowed))
     }
 
-    fn list(&self, path: &str) -> gpui::Result<Vec<SharedString>> {
-        let assets = match path {
-            "fonts" => vec!["fonts/Inter.ttf"],
-            "icons" => vec!["icons/x.svg"],
-
-            _ => vec![],
-        };
-
-        Ok(assets.into_iter().map(SharedString::from).collect())
+    fn list(&self, _path: &str) -> gpui::Result<Vec<SharedString>> {
+        // It isn't actually required to load the assets, so we can return an empty Vec.
+        Ok(vec![])
     }
 }

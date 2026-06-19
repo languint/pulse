@@ -39,6 +39,7 @@ impl TypographyTokens {
 }
 
 impl TypographyTokens {
+    #[must_use]
     pub fn font(&self, style: TextStyle) -> gpui::Font {
         gpui::Font {
             family: SharedString::new(self.font_family),
