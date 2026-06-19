@@ -157,9 +157,9 @@ impl RenderOnce for Stack {
 
 #[cfg(test)]
 mod tests {
-    use gpui::ParentElement;
+    use gpui::{IntoElement, ParentElement};
 
-    use crate::components::ui::stack::{Stack, StackDirection};
+    use crate::components::ui::stack::{ItemAlignment, JustifyContent, Stack, StackDirection};
 
     #[test]
     fn child_builder_adds_children() {
@@ -178,5 +178,119 @@ mod tests {
             .children(["B", "C"]);
 
         assert_eq!(stack.children.len(), 3);
+    }
+
+    #[test]
+    fn extend_adds_children() {
+        let mut stack = Stack::new(StackDirection::Horizontal);
+
+        stack.extend(vec![
+            "A".into_any_element(),
+            "B".into_any_element(),
+            "C".into_any_element(),
+        ]);
+
+        assert_eq!(stack.children.len(), 3);
+    }
+
+    #[test]
+    fn gap_sets_gap() {
+        let stack = Stack::new(StackDirection::Horizontal).gap(gpui::px(12.));
+
+        assert_eq!(stack.gap, Some(gpui::px(12.)));
+    }
+
+    #[test]
+    fn align_sets_alignment() {
+        let stack = Stack::new(StackDirection::Horizontal).align(ItemAlignment::End);
+
+        assert!(matches!(stack.align, ItemAlignment::End));
+    }
+
+    #[test]
+    fn justify_sets_justification() {
+        let stack = Stack::new(StackDirection::Horizontal).justify(JustifyContent::Between);
+
+        assert!(matches!(stack.justify, JustifyContent::Between));
+    }
+
+    #[test]
+    fn center_sets_both_alignment_and_justification() {
+        let stack = Stack::new(StackDirection::Horizontal).center();
+
+        assert!(matches!(stack.align, ItemAlignment::Center));
+        assert!(matches!(stack.justify, JustifyContent::Center));
+    }
+
+    #[test]
+    fn new_vertical_stack_has_correct_direction() {
+        let stack = Stack::new(StackDirection::Vertical);
+
+        assert!(matches!(stack.direction, StackDirection::Vertical));
+    }
+
+    #[test]
+    fn new_horizontal_stack_has_correct_direction() {
+        let stack = Stack::new(StackDirection::Horizontal);
+
+        assert!(matches!(stack.direction, StackDirection::Horizontal));
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use gpui::{AvailableSpace, IntoElement, ParentElement, point, px, size};
+
+    use super::*;
+
+    #[gpui::test]
+    async fn horizontal_stack_draws(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+
+        cx.draw(
+            point(px(0.), px(0.)),
+            size(AvailableSpace::MinContent, AvailableSpace::MinContent),
+            |_window, _cx| {
+                Stack::new(StackDirection::Horizontal)
+                    .gap(px(8.))
+                    .child("A")
+                    .child("B")
+                    .into_element()
+            },
+        );
+    }
+
+    #[gpui::test]
+    async fn vertical_stack_draws(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+
+        cx.draw(
+            point(px(0.), px(0.)),
+            size(AvailableSpace::MinContent, AvailableSpace::MinContent),
+            |_window, _cx| {
+                Stack::new(StackDirection::Vertical)
+                    .gap(px(8.))
+                    .child("A")
+                    .child("B")
+                    .into_element()
+            },
+        );
+    }
+
+    #[gpui::test]
+    async fn stack_accepts_styling(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+
+        cx.draw(
+            point(px(0.), px(0.)),
+            size(AvailableSpace::MinContent, AvailableSpace::MinContent),
+            |_window, _cx| {
+                Stack::new(StackDirection::Horizontal)
+                    .bg(gpui::red())
+                    .border_1()
+                    .child("Hello")
+                    .into_element()
+            },
+        );
     }
 }

@@ -27,11 +27,6 @@ impl Icon {
 
 impl Icon {
     #[must_use]
-    pub fn stack(self) -> Stack {
-        self.stack_element
-    }
-
-    #[must_use]
     pub const fn text_color(mut self, color: gpui::Hsla) -> Self {
         self.color = Some(color);
         self
@@ -53,5 +48,45 @@ impl RenderOnce for Icon {
         }
 
         self.stack_element.child(svg_element)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_sets_defaults() {
+        let icon = Icon::new(IconName::CLOSE, gpui::px(16.));
+
+        assert_eq!(icon.size, gpui::px(16.));
+        assert!(icon.color.is_none());
+    }
+
+    #[test]
+    fn text_color_sets_color() {
+        let color = gpui::red();
+
+        let icon = Icon::new(IconName::CLOSE, gpui::px(16.)).text_color(color);
+
+        assert_eq!(icon.color, Some(color));
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use gpui::{AvailableSpace, IntoElement, point, px, size};
+
+    use super::*;
+
+    #[gpui::test]
+    async fn icon_draws(cx: &mut gpui::TestAppContext) {
+        let cx = cx.add_empty_window();
+
+        cx.draw(
+            point(px(0.), px(0.)),
+            size(AvailableSpace::MinContent, AvailableSpace::MinContent),
+            |_window, _cx| Icon::new(IconName::CLOSE, px(16.)).into_element(),
+        );
     }
 }
