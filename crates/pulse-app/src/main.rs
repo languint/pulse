@@ -35,7 +35,14 @@ fn main() {
                 ..Default::default()
             };
 
-            if let Err(e) = cx.open_window(window_options, |_, cx| cx.new(|_| Pulse)) {
+            if let Err(e) = cx.open_window(window_options, |window, cx| {
+                let pulse_view = cx.new(Pulse::new);
+
+                let focus_handle = pulse_view.read(cx).focus_handle.clone();
+                window.focus(&focus_handle);
+
+                pulse_view
+            }) {
                 tracing::error!("failed to open window: {e}");
                 cx.quit();
             }

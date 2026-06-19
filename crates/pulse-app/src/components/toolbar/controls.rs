@@ -1,9 +1,12 @@
 use gpui::{
-    App, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window,
-    WindowControlArea, div, px,
+    App, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce, Styled,
+    Window, WindowControlArea, div, px,
 };
 
-use crate::components::ui::prelude::*;
+use crate::components::{
+    toolbar::actions::{Close, Minimize},
+    ui::prelude::*,
+};
 
 use pulse_assets::icons::IconName;
 
@@ -13,15 +16,21 @@ use crate::{components::toolbar::TOOLBAR_HEIGHT, config::PulseContext};
 pub struct ToolbarControlButton {
     icon: IconName,
     control_area: WindowControlArea,
+    on_click: fn(window: &mut gpui::Window, cx: &mut gpui::App),
     hover: Option<Hsla>,
 }
 
 impl ToolbarControlButton {
     #[must_use]
-    pub const fn new(icon: IconName, control_area: WindowControlArea) -> Self {
+    pub const fn new(
+        icon: IconName,
+        control_area: WindowControlArea,
+        on_click: fn(window: &mut gpui::Window, cx: &mut gpui::App),
+    ) -> Self {
         Self {
             icon,
             control_area,
+            on_click,
             hover: None,
         }
     }
@@ -42,6 +51,9 @@ impl RenderOnce for ToolbarControlButton {
             .w(px(36.))
             .h(TOOLBAR_HEIGHT)
             .hover(|style| style.bg(self.hover.unwrap_or(theme.colors.surface_variant)))
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                (self.on_click)(window, cx)
+            })
             .window_control_area(self.control_area)
             .child(Icon::new(self.icon, px(16.)).text_color(theme.colors.text.primary))
     }
@@ -51,7 +63,7 @@ impl RenderOnce for ToolbarControlButton {
 pub struct ToolbarControls;
 
 impl RenderOnce for ToolbarControls {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme();
 
         div()
@@ -60,18 +72,19 @@ impl RenderOnce for ToolbarControls {
             .child(ToolbarControlButton::new(
                 IconName::MINIMIZE,
                 WindowControlArea::Min,
-            ))
-            .child(ToolbarControlButton::new(
-                if window.is_maximized() {
-                    IconName::RESTORE
-                } else {
-                    IconName::MAXIMIZE
+                |window, cx| {
+                    window.dispatch_action(Box::new(Minimize), cx);
                 },
-                WindowControlArea::Max,
             ))
             .child(
-                ToolbarControlButton::new(IconName::CLOSE, WindowControlArea::Close)
-                    .hover_color(theme.colors.error),
+                ToolbarControlButton::new(
+                    IconName::CLOSE,
+                    WindowControlArea::Close,
+                    |window, cx| {
+                        window.dispatch_action(Box::new(Close), cx);
+                    },
+                )
+                .hover_color(theme.colors.error),
             )
     }
 }

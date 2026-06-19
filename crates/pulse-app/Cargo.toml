@@ -8,6 +8,7 @@ gpui.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+serde.workspace = true
 
 tracing-subscriber = "0.3"
 

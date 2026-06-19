@@ -2,6 +2,7 @@ use gpui::{InteractiveElement, ParentElement, Pixels, Styled, div, px};
 
 use crate::{components::toolbar::controls::ToolbarControls, config::PulseContext};
 
+pub mod actions;
 pub mod controls;
 
 pub struct Toolbar;
