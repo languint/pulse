@@ -1,9 +1,11 @@
-use gpui::{AppContext, Application, UpdateGlobal, WindowOptions};
+use gpui::{AppContext, UpdateGlobal, WindowOptions};
+use gpui_component::Root;
 
 pub mod actions;
 pub mod components;
 pub mod config;
 pub mod error;
+pub mod pulse;
 
 use actions::ToggleFullscreen;
 use components::pulse::Pulse;
@@ -15,43 +17,37 @@ fn main() {
     tracing_subscriber::fmt::init();
     tracing::info!("Hello Pulse!");
 
-    Application::new()
-        .with_assets(pulse_assets::PulseAssetSource)
-        .run(|mut cx| {
-            if let Err(e) = cx
-                .text_system()
-                .add_fonts(vec![pulse_assets::fonts::INTER.into()])
-            {
-                tracing::error!("failed to load fonts: {e}");
-                cx.quit();
-            }
+    gpui_platform::application()
+        .with_assets(gpui_component_assets::Assets)
+        .run(move |cx| {
+            gpui_component::init(cx);
+            pulse::init(cx);
 
-            PulseConfig::set_global(
-                &mut cx,
-                PulseConfig {
-                    theme: pulse_theme::themes::pulse_dark(),
-                },
-            );
-
-            let window_options = WindowOptions {
-                titlebar: None,
-                ..Default::default()
-            };
-
-            if let Err(e) = cx.open_window(window_options, |window, cx| {
-                let pulse = cx.new(Pulse::new);
-                window.focus(&pulse.read(cx).focus_handle);
-                pulse
-            }) {
-                tracing::error!("failed to open window: {e}");
-                cx.quit();
-            }
+            PulseConfig::set_global(cx, PulseConfig {});
 
             PulseKeymap::default().bind(
-                &mut cx,
+                cx,
                 PulseActionBindings {
                     toggle_fullscreen: ToggleFullscreen,
                 },
             );
+
+            cx.spawn(async move |cx| {
+                let window_options = WindowOptions {
+                    titlebar: None,
+                    ..Default::default()
+                };
+
+                if let Err(e) = cx.open_window(window_options, |window, cx| {
+                    let pulse = cx.new(Pulse::new);
+                    let focus_handle = pulse.read(cx).focus_handle.clone();
+                    window.focus(&focus_handle, cx);
+                    cx.new(|cx| Root::new(pulse, window, cx))
+                }) {
+                    tracing::error!("failed to open window: {e}");
+                    std::process::exit(1);
+                }
+            })
+            .detach();
         });
 }

@@ -1,13 +1,24 @@
 [workspace]
 resolver = "3"
-members = ["crates/pulse-app", "crates/pulse-assets", "crates/pulse-audio", "crates/pulse-keymap", "crates/pulse-library", "crates/pulse-model", "crates/pulse-theme"]
+members = [
+    "crates/pulse-app",
+    "crates/pulse-audio",
+    "crates/pulse-keymap",
+    "crates/pulse-library",
+    "crates/pulse-model"
+]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-gpui = { version =  "*", features = ["test-support"] }
+# gpui-component pins Zed to rev 1d217ee… internally; gpui and gpui_platform must use the same rev.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac101b7cf49d3d22451ac1093fe", features = ["test-support"] }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac101b7cf49d3d22451ac1093fe", features = ["font-kit"] }
+gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+
 serde = { version = "1", features = ["derive"] }
 anyhow = "1"
 thiserror = "2"

@@ -1,11 +1,11 @@
 use gpui::{
     AppContext, FocusHandle, InteractiveElement, ParentElement, Render, Styled, Window, div,
 };
+use gpui_component::ActiveTheme;
 
 use crate::{
     actions::ToggleFullscreen,
     components::{sidebar::Sidebar, toolbar::Toolbar},
-    config::PulseContext,
 };
 
 pub struct Pulse {
@@ -32,10 +32,9 @@ impl Render for Pulse {
             .size_full()
             .flex()
             .flex_col()
-            .bg(theme.colors.background)
-            .text_color(theme.colors.text.primary)
-            .text_size(theme.typography.body.size)
-            .font(theme.typography.font(theme.typography.body))
+            .bg(theme.background)
+            .text_color(theme.foreground)
+            .text_size(theme.font_size)
             .child(cx.new(|_| Toolbar))
             .child(
                 div()
@@ -46,7 +45,6 @@ impl Render for Pulse {
                     .track_focus(&self.focus_handle)
                     .on_action(cx.listener(|_, _: &ToggleFullscreen, window, _| {
                         window.toggle_fullscreen();
-                        window.refresh();
                     }))
                     .child(cx.new(|_| Sidebar)),
             )

@@ -1,6 +1,5 @@
 use gpui::{ParentElement, Styled, div, px};
-
-use crate::config::PulseContext;
+use gpui_component::ActiveTheme;
 
 pub struct Sidebar;
 
@@ -17,10 +16,10 @@ impl gpui::Render for Sidebar {
             .h_full()
             .flex()
             .flex_col()
-            .p(theme.spacing.md)
-            .bg(theme.colors.surface)
+            .p(px(12.))
+            .bg(theme.sidebar)
             .border_r_1()
-            .border_color(theme.colors.border)
+            .border_color(theme.sidebar_border)
             .child("Pulse")
     }
 }

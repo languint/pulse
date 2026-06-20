@@ -5,6 +5,10 @@ edition = "2024"
 
 [dependencies]
 gpui.workspace = true
+gpui_platform.workspace = true
+gpui-component.workspace = true
+gpui-component-assets.workspace = true
+
 anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -15,8 +19,6 @@ tracing-subscriber = "0.3"
 pulse-model = { path = "../pulse-model" }
 pulse-audio = { path = "../pulse-audio" }
 pulse-library = { path = "../pulse-library" }
-pulse-theme = { path = "../pulse-theme" }
-pulse-assets = { path = "../pulse-assets" }
 pulse-keymap = { path = "../pulse-keymap" }
 
 [lints]
