@@ -9,13 +9,13 @@ use crate::{
     components::{
         library_roots_dialog::open_library_roots_dialog,
         navigation::PulsePage,
-        pages::{AlbumViewerPage, AlbumsPage, ArtistsPage},
+        pages::{AlbumViewerPage, AlbumsPage, ArtistViewerPage, ArtistsPage},
         sidebar::AppSidebar,
         toolbar::Toolbar,
     },
 };
 
-use pulse_model::AlbumId;
+use pulse_model::{AlbumId, ArtistId};
 
 pub mod icon;
 
@@ -27,6 +27,7 @@ pub struct Pulse {
     albums_page: Entity<AlbumsPage>,
     artists_page: Entity<ArtistsPage>,
     album_viewer_page: Entity<AlbumViewerPage>,
+    artist_viewer_page: Entity<ArtistViewerPage>,
 }
 
 impl Pulse {
@@ -39,8 +40,9 @@ impl Pulse {
             toolbar: cx.new(Toolbar::new),
             sidebar: cx.new(|_| AppSidebar::new(pulse.clone())),
             albums_page: cx.new(|cx| AlbumsPage::new(pulse.clone(), cx)),
-            artists_page: cx.new(ArtistsPage::new),
+            artists_page: cx.new(|cx| ArtistsPage::new(pulse.clone(), cx)),
             album_viewer_page: cx.new(|cx| AlbumViewerPage::new(pulse.clone(), cx)),
+            artist_viewer_page: cx.new(|cx| ArtistViewerPage::new(pulse.clone(), cx)),
         }
     }
 
@@ -63,8 +65,18 @@ impl Pulse {
         cx.notify();
     }
 
+    pub fn open_artist(&mut self, artist_id: ArtistId, cx: &mut gpui::Context<Self>) {
+        self.page = PulsePage::ArtistDetail(artist_id);
+        cx.notify();
+    }
+
     pub fn show_albums(&mut self, cx: &mut gpui::Context<Self>) {
         self.page = PulsePage::Albums;
+        cx.notify();
+    }
+
+    pub fn show_artists(&mut self, cx: &mut gpui::Context<Self>) {
+        self.page = PulsePage::Artists;
         cx.notify();
     }
 }
@@ -85,6 +97,7 @@ impl Render for Pulse {
             PulsePage::Albums => self.albums_page.clone().into_any_element(),
             PulsePage::Artists => self.artists_page.clone().into_any_element(),
             PulsePage::AlbumDetail(_) => self.album_viewer_page.clone().into_any_element(),
+            PulsePage::ArtistDetail(_) => self.artist_viewer_page.clone().into_any_element(),
         };
 
         let mut root = div()

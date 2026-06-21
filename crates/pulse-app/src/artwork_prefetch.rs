@@ -93,6 +93,7 @@ mod tests {
     fn item_at(index: usize) -> GridItem {
         GridItem {
             album_id: None,
+            artist_id: None,
             title: format!("Item {index}").into(),
             subtitle: gpui::SharedString::default(),
             thumbnail: None,

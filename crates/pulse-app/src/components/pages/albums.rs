@@ -73,6 +73,7 @@ impl Render for AlbumsPage {
                     empty_message: "No albums in your library yet.",
                     scroll_handle: &self.scroll_handle,
                     on_album_open: Some(pulse),
+                    on_artist_open: None,
                     item_sizes: self.cached_item_sizes.clone(),
                 },
                 cx,

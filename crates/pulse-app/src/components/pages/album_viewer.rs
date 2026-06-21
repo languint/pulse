@@ -23,7 +23,7 @@ use crate::data::save_album_user_labels;
 use super::common::{
     AlbumDisplay, CatalogFingerprint, TrackRow, album_label_is_taken, catalog_fingerprint,
     collect_suggested_labels, empty_state, filter_tag_suggestions, format_album_duration_ms,
-    resolve_album_display,
+    overrides_generation, resolve_album_display, AlbumArtistEntry,
 };
 
 const DETAIL_PANEL_WIDTH: f32 = 360.;
@@ -83,6 +83,7 @@ pub struct AlbumViewerPage {
     tag_suggestions: Vec<String>,
     cached_album_id: Option<AlbumId>,
     catalog_fp: CatalogFingerprint,
+    overrides_gen: u32,
     display: Option<AlbumDisplay>,
     list_rows: Rc<[AlbumTrackListRow]>,
     item_sizes: Rc<Vec<Size<Pixels>>>,
@@ -100,6 +101,7 @@ impl AlbumViewerPage {
             tag_suggestions: Vec::new(),
             cached_album_id: None,
             catalog_fp: CatalogFingerprint::default(),
+            overrides_gen: 0,
             display: None,
             list_rows: Rc::from([]),
             item_sizes: Rc::new(Vec::new()),
@@ -237,13 +239,18 @@ impl AlbumViewerPage {
 
     fn ensure_album(&mut self, album_id: AlbumId, cx: &gpui::App) {
         let fp = catalog_fingerprint(cx);
-        if self.cached_album_id == Some(album_id) && self.catalog_fp == fp {
+        let overrides_gen = overrides_generation(cx);
+        if self.cached_album_id == Some(album_id)
+            && self.catalog_fp == fp
+            && self.overrides_gen == overrides_gen
+        {
             return;
         }
 
         let Some(display) = resolve_album_display(cx, album_id) else {
             self.cached_album_id = None;
             self.catalog_fp = fp;
+            self.overrides_gen = overrides_gen;
             self.display = None;
             self.list_rows = Rc::from([]);
             self.item_sizes = Rc::new(Vec::new());
@@ -256,6 +263,7 @@ impl AlbumViewerPage {
         self.display = Some(display);
         self.cached_album_id = Some(album_id);
         self.catalog_fp = fp;
+        self.overrides_gen = overrides_gen;
     }
 
     fn render_track_list_row(&self, row_ix: usize, cx: &gpui::App) -> AnyElement {
@@ -324,6 +332,7 @@ impl Render for AlbumViewerPage {
                     )
                     .child(album_tags_panel(
                         &entity,
+                        &self.pulse,
                         &display,
                         &tag_input,
                         &tag_suggestions,
@@ -369,8 +378,10 @@ fn album_stats_line(display: &AlbumDisplay) -> Option<String> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn album_tags_panel(
     view: &Entity<AlbumViewerPage>,
+    pulse: &Entity<Pulse>,
     display: &AlbumDisplay,
     tag_input: &Entity<InputState>,
     tag_suggestions: &[String],
@@ -392,7 +403,7 @@ fn album_tags_panel(
         .border_color(theme.border)
         .bg(theme.muted.opacity(0.35))
         .child(album_artwork_frame(display, cx))
-        .child(album_detail_metadata(display, cx))
+        .child(album_detail_metadata(pulse, display, cx))
         .child(album_tags_editor(
             view,
             display,
@@ -420,7 +431,11 @@ fn album_artwork_frame(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoEleme
     )
 }
 
-fn album_detail_metadata(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoElement {
+fn album_detail_metadata(
+    pulse: &Entity<Pulse>,
+    display: &AlbumDisplay,
+    cx: &gpui::App,
+) -> impl IntoElement {
     let theme = cx.theme();
 
     v_flex()
@@ -434,12 +449,81 @@ fn album_detail_metadata(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoEle
                     .child(line),
             )
         })
+        .child(album_artist_line(pulse, display, cx))
+}
+
+fn album_artist_line(
+    pulse: &Entity<Pulse>,
+    display: &AlbumDisplay,
+    cx: &gpui::App,
+) -> impl IntoElement {
+    let theme = cx.theme();
+
+    if display.artist_entries.is_empty() {
+        return div()
+            .text_sm()
+            .text_color(theme.muted_foreground)
+            .child(display.artists.clone())
+            .into_any_element();
+    }
+
+    h_flex()
+        .flex_wrap()
+        .items_center()
+        .gap_2()
+        .children(artist_line_elements(pulse, &display.artist_entries, cx))
+        .into_any_element()
+}
+
+fn artist_line_elements(
+    pulse: &Entity<Pulse>,
+    entries: &[AlbumArtistEntry],
+    cx: &gpui::App,
+) -> Vec<AnyElement> {
+    let theme = cx.theme();
+    let mut elements = Vec::new();
+
+    for (index, entry) in entries.iter().enumerate() {
+        if index > 0 {
+            elements.push(
+                div()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child(", ")
+                    .into_any_element(),
+            );
+        }
+        elements.push(artist_name_chip(pulse, entry, cx).into_any_element());
+    }
+
+    elements
+}
+
+fn artist_name_chip(
+    pulse: &Entity<Pulse>,
+    entry: &AlbumArtistEntry,
+    cx: &gpui::App,
+) -> impl IntoElement {
+    let theme = cx.theme();
+    let pulse = pulse.clone();
+    let artist_id = entry.artist_id;
+
+    h_flex()
+        .id(("album-artist-link", artist_id.0))
+        .items_center()
+        .cursor_pointer()
         .child(
             div()
                 .text_sm()
                 .text_color(theme.muted_foreground)
-                .child(display.artists.clone()),
+                .child(entry.name.clone()),
         )
+        .hover(|this| this.text_color(theme.primary))
+        .on_click(move |_, _, cx| {
+            pulse.update(cx, |pulse, cx| {
+                pulse.open_artist(artist_id, cx);
+            });
+        })
 }
 
 fn album_tags_editor(

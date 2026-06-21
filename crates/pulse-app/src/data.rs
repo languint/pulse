@@ -1,7 +1,8 @@
 use std::ops::Deref;
+use std::path::Path;
 
 use gpui::{App, Global, UpdateGlobal};
-use pulse_data::{PulsePaths, UserOverrides};
+use pulse_data::{DataError, PulsePaths, UserOverrides};
 
 /// Application-global handle to [`PulsePaths`].
 #[derive(Clone, Debug)]
@@ -24,7 +25,6 @@ impl Deref for DataPaths {
 
 impl Global for DataPaths {}
 
-/// Application-global user metadata overrides.
 #[derive(Clone, Debug, Default)]
 pub struct DataOverrides(pub UserOverrides);
 
@@ -37,6 +37,17 @@ impl Deref for DataOverrides {
 }
 
 impl Global for DataOverrides {}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OverridesGeneration(pub u32);
+
+impl Global for OverridesGeneration {}
+
+fn bump_overrides_generation(cx: &mut App) {
+    OverridesGeneration::update_global(cx, |generation, _| {
+        generation.0 = generation.0.wrapping_add(1);
+    });
+}
 
 /// Writes application settings to disk.
 ///
@@ -79,12 +90,57 @@ pub fn save_album_user_labels(cx: &mut App, override_key: &str, labels: &[String
     let paths = cx.global::<DataPaths>().clone();
 
     DataOverrides::update_global(cx, |data, _| {
-        data.0.set_album_user_labels(override_key.to_string(), labels);
+        data.0
+            .set_album_user_labels(override_key.to_string(), labels);
 
         if let Err(error) = persist_overrides(&paths, &data.0) {
             tracing::error!(%error, "failed to save metadata overrides");
         }
     });
 
+    bump_overrides_generation(cx);
     cx.refresh_windows();
+}
+
+/// Updates and persists custom artwork for an artist.
+pub fn save_artist_artwork(cx: &mut App, override_key: &str, artwork: Option<std::path::PathBuf>) {
+    let paths = cx.global::<DataPaths>().clone();
+
+    DataOverrides::update_global(cx, |data, _| {
+        data.0.set_artist_artwork(override_key.to_string(), artwork);
+
+        if let Err(error) = persist_overrides(&paths, &data.0) {
+            tracing::error!(%error, "failed to save metadata overrides");
+        }
+    });
+
+    bump_overrides_generation(cx);
+    cx.refresh_windows();
+}
+
+/// Imports an image file into Pulse data storage and saves it as an artist logo override.
+///
+/// # Errors
+///
+/// Returns [`DataError`] when the image cannot be copied or overrides cannot be saved.
+pub fn import_and_save_artist_logo(
+    cx: &mut App,
+    override_key: &str,
+    source: &Path,
+) -> Result<(), DataError> {
+    let paths = cx.global::<DataPaths>().clone();
+    let relative_path = paths.import_custom_artwork(&format!("artist-{override_key}"), source)?;
+
+    DataOverrides::update_global(cx, |data, _| {
+        data.0
+            .set_artist_artwork(override_key.to_string(), Some(relative_path.clone()));
+
+        if let Err(error) = persist_overrides(&paths, &data.0) {
+            tracing::error!(%error, "failed to save metadata overrides");
+        }
+    });
+
+    bump_overrides_generation(cx);
+    cx.refresh_windows();
+    Ok(())
 }

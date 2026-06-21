@@ -13,6 +13,7 @@ pub struct VirtualThumbnailGridParams<'a> {
     pub empty_message: &'static str,
     pub scroll_handle: &'a VirtualListScrollHandle,
     pub on_album_open: Option<Entity<Pulse>>,
+    pub on_artist_open: Option<Entity<Pulse>>,
     pub item_sizes: Rc<Vec<Size<Pixels>>>,
 }
 
@@ -29,6 +30,7 @@ pub fn virtual_thumbnail_grid<V: Render>(
 
     let grid_id = params.grid_id;
     let on_album_open = params.on_album_open;
+    let on_artist_open = params.on_artist_open;
 
     v_virtual_list(
         view,
@@ -57,6 +59,7 @@ pub fn virtual_thumbnail_grid<V: Render>(
                                     layout,
                                     items: items.clone(),
                                     on_album_open: on_album_open.clone(),
+                                    on_artist_open: on_artist_open.clone(),
                                 },
                                 cx,
                             )

@@ -4935,6 +4935,7 @@ dependencies = [
  "pulse-model",
  "pulse-runtime",
  "rfd",
+ "rust-embed",
  "serde",
  "thiserror 2.0.18",
  "tracing",

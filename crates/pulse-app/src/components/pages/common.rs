@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::data::{DataOverrides, DataPaths};
+use crate::data::{DataOverrides, DataPaths, OverridesGeneration};
 use gpui::{
     AnyElement, InteractiveElement, IntoElement, ObjectFit, ParentElement, Pixels, SharedString,
     Size, StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder,
     px, size,
 };
 use gpui_component::{ActiveTheme, Icon, IconName, StyledExt as _, tooltip::Tooltip, v_flex};
-use pulse_data::{UserOverrides, album_override_key, album_user_labels, artist_override_key};
+use pulse_data::{UserOverrides, album_override_key, album_user_labels, artist_override_key, artist_user_labels};
 use pulse_model::{Album, AlbumArtists, Artist, ArtistId, ArtworkId, Song, SongId, ThumbnailSize};
 
 use crate::artwork_prefetch;
@@ -119,9 +119,37 @@ pub fn catalog_fingerprint(cx: &gpui::App) -> CatalogFingerprint {
 }
 
 #[must_use]
+pub fn overrides_generation(cx: &gpui::App) -> u32 {
+    cx.global::<OverridesGeneration>().0
+}
+
+pub fn album_artist_entries(
+    artists: &HashMap<ArtistId, Artist>,
+    album_artists: &AlbumArtists,
+) -> Vec<AlbumArtistEntry> {
+    album_artists
+        .artist_ids()
+        .into_iter()
+        .filter_map(|artist_id| {
+            let artist = artists.get(&artist_id)?;
+            Some(AlbumArtistEntry {
+                artist_id,
+                name: artist.name.clone().into(),
+            })
+        })
+        .collect()
+}
+
+#[must_use]
 pub fn grid_item_sizes(layout: GridLayout, item_count: usize) -> Rc<Vec<Size<Pixels>>> {
     let row_count = item_count.div_ceil(layout.columns);
     Rc::new(vec![size(px(0.), px(layout.row_height)); row_count])
+}
+
+#[derive(Clone, Debug)]
+pub struct AlbumArtistEntry {
+    pub artist_id: ArtistId,
+    pub name: SharedString,
 }
 
 #[derive(Clone, Debug)]
@@ -130,6 +158,7 @@ pub struct AlbumDisplay {
     pub override_key: String,
     pub title: SharedString,
     pub artists: SharedString,
+    pub artist_entries: Vec<AlbumArtistEntry>,
     pub year: Option<u16>,
     pub duration_ms: u64,
     pub artwork: Option<PathBuf>,
@@ -150,8 +179,48 @@ pub struct TrackRow {
 }
 
 #[derive(Clone, Debug)]
+pub struct TagCount {
+    pub label: String,
+    pub count: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct ArtistAlbumRow {
+    pub album_id: pulse_model::AlbumId,
+    pub title: SharedString,
+    pub subtitle: SharedString,
+    pub artwork: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ArtistSongRow {
+    #[allow(dead_code)]
+    pub song_id: SongId,
+    pub title: SharedString,
+    pub subtitle: SharedString,
+    pub duration: SharedString,
+    pub artwork: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ArtistDisplay {
+    pub artist_id: ArtistId,
+    #[allow(dead_code)]
+    pub override_key: String,
+    pub name: SharedString,
+    pub artwork: Option<PathBuf>,
+    pub has_custom_logo: bool,
+    pub album_count: usize,
+    pub other_song_count: usize,
+    pub albums: Vec<ArtistAlbumRow>,
+    pub other_songs: Vec<ArtistSongRow>,
+    pub tag_counts: Vec<TagCount>,
+}
+
+#[derive(Clone, Debug)]
 pub struct GridItem {
     pub album_id: Option<pulse_model::AlbumId>,
+    pub artist_id: Option<ArtistId>,
     pub title: SharedString,
     pub subtitle: SharedString,
     pub thumbnail: Option<PathBuf>,
@@ -246,6 +315,225 @@ pub fn album_detail_artwork_path(
         .or_else(|| artwork_path(store, artwork_id, ThumbnailSize::Medium))
 }
 
+pub fn artist_detail_artwork_path(
+    store: &pulse_library::LibraryStore,
+    artist_id: ArtistId,
+) -> Option<PathBuf> {
+    if let Some(artwork_id) = store
+        .artists()
+        .get(&artist_id)
+        .and_then(|artist| artist.artwork_id)
+    {
+        return album_detail_artwork_path(store, Some(artwork_id));
+    }
+
+    store
+        .albums()
+        .values()
+        .find(|album| album.artwork_id.is_some() && album_includes_artist(album, artist_id))
+        .and_then(|album| album_detail_artwork_path(store, album.artwork_id))
+}
+
+pub fn resolve_album_artwork(
+    cx: &gpui::App,
+    album: &Album,
+    artist_label: &str,
+) -> Option<PathBuf> {
+    let override_key = album_override_key(&album.title, artist_label);
+    let user_override = cx.global::<DataOverrides>().album(&override_key);
+    let paths = cx.global::<DataPaths>();
+    let store = cx.global::<PulseLibrary>().inner().store();
+
+    user_override
+        .and_then(|entry| entry.artwork.as_deref())
+        .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)))
+        .or_else(|| album_thumbnail_path(store, album.artwork_id))
+}
+
+pub fn song_belongs_to_artist(song: &Song, artist_id: ArtistId) -> bool {
+    song.track_artists.contains(&artist_id)
+}
+
+pub fn song_on_artist_album(
+    store: &pulse_library::LibraryStore,
+    song: &Song,
+    artist_id: ArtistId,
+) -> bool {
+    song.album_id
+        .and_then(|album_id| store.albums().get(&album_id))
+        .is_some_and(|album| album_includes_artist(album, artist_id))
+}
+
+pub fn aggregate_tag_counts<'a>(labels: impl IntoIterator<Item = &'a str>) -> Vec<TagCount> {
+    use std::collections::BTreeMap;
+
+    let mut counts: BTreeMap<String, (String, usize)> = BTreeMap::new();
+
+    for label in labels {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let key = trimmed.to_ascii_lowercase();
+        counts
+            .entry(key)
+            .and_modify(|(_, count)| *count = count.saturating_add(1))
+            .or_insert_with(|| (trimmed.to_string(), 1));
+    }
+
+    let mut tag_counts: Vec<TagCount> = counts
+        .into_values()
+        .map(|(label, count)| TagCount { label, count })
+        .collect();
+
+    tag_counts.sort_by(|left, right| {
+        right
+            .count
+            .cmp(&left.count)
+            .then_with(|| left.label.to_ascii_lowercase().cmp(&right.label.to_ascii_lowercase()))
+    });
+
+    tag_counts
+}
+
+fn collect_artist_album_rows(
+    cx: &gpui::App,
+    store: &pulse_library::LibraryStore,
+    artists: &HashMap<ArtistId, Artist>,
+    overrides: &UserOverrides,
+    artist_id: ArtistId,
+    tag_labels: &mut Vec<String>,
+) -> Vec<ArtistAlbumRow> {
+    let mut albums: Vec<&Album> = store
+        .albums()
+        .values()
+        .filter(|album| album_includes_artist(album, artist_id))
+        .collect();
+    albums.sort_by(|left, right| left.title.cmp(&right.title));
+
+    albums
+        .into_iter()
+        .map(|album| {
+            let artist_label = format_album_artists(artists, &album.album_artists);
+            let album_key = album_override_key(&album.title, &artist_label);
+            let album_override = overrides.album(&album_key);
+
+            tag_labels.extend(album.metadata.genres.iter().cloned());
+            tag_labels.extend(album_user_labels(album_override));
+
+            for song in store.songs().values().filter(|song| song.album_id == Some(album.id)) {
+                tag_labels.extend(song.metadata.genres.iter().cloned());
+            }
+
+            let title = album_override
+                .and_then(|entry| entry.title.as_deref())
+                .unwrap_or(&album.title);
+            let track_count = store
+                .songs()
+                .values()
+                .filter(|song| song.album_id == Some(album.id))
+                .count();
+            let mut subtitle_parts = Vec::new();
+            if let Some(year) = album.year {
+                subtitle_parts.push(year.to_string());
+            }
+            subtitle_parts.push(format!("{track_count} tracks"));
+
+            ArtistAlbumRow {
+                album_id: album.id,
+                title: title.to_string().into(),
+                subtitle: subtitle_parts.join(" · ").into(),
+                artwork: resolve_album_artwork(cx, album, &artist_label),
+            }
+        })
+        .collect()
+}
+
+fn collect_artist_other_songs(
+    cx: &gpui::App,
+    store: &pulse_library::LibraryStore,
+    artists: &HashMap<ArtistId, Artist>,
+    artist_id: ArtistId,
+    tag_labels: &mut Vec<String>,
+) -> Vec<ArtistSongRow> {
+    let mut songs: Vec<&Song> = store
+        .songs()
+        .values()
+        .filter(|song| {
+            song_belongs_to_artist(song, artist_id) && !song_on_artist_album(store, song, artist_id)
+        })
+        .collect();
+    songs.sort_by(|left, right| {
+        left.title
+            .cmp(&right.title)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+
+    songs
+        .into_iter()
+        .map(|song| {
+            tag_labels.extend(song.metadata.genres.iter().cloned());
+
+            let album = song.album_id.and_then(|album_id| store.albums().get(&album_id));
+            let album_name = album.map_or_else(|| "Unknown Album".into(), |entry| entry.title.clone());
+            let song_artwork = album.and_then(|entry| {
+                let artist_label = format_album_artists(artists, &entry.album_artists);
+                resolve_album_artwork(cx, entry, &artist_label)
+            });
+
+            ArtistSongRow {
+                song_id: song.id,
+                title: song.title.clone().into(),
+                subtitle: album_name.into(),
+                duration: format_duration_ms(song.duration_ms).into(),
+                artwork: song_artwork,
+            }
+        })
+        .collect()
+}
+
+pub fn resolve_artist_display(cx: &gpui::App, artist_id: ArtistId) -> Option<ArtistDisplay> {
+    let library = cx.global::<PulseLibrary>().inner();
+    let store = library.store();
+    let artist = store.artists().get(&artist_id)?;
+    let artists = store.artists();
+    let paths = cx.global::<DataPaths>();
+    let overrides = cx.global::<DataOverrides>();
+
+    let override_key = artist_override_key(&artist.name);
+    let user_override = overrides.artist(&override_key);
+
+    let name = user_override
+        .and_then(|entry| entry.name.as_deref())
+        .unwrap_or(&artist.name);
+
+    let artwork = user_override
+        .and_then(|entry| entry.artwork.as_deref())
+        .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)))
+        .or_else(|| artist_detail_artwork_path(store, artist_id));
+    let has_custom_logo = user_override.and_then(|entry| entry.artwork.as_ref()).is_some();
+
+    let mut tag_labels: Vec<String> = artist_user_labels(user_override);
+    let album_rows =
+        collect_artist_album_rows(cx, store, artists, overrides, artist_id, &mut tag_labels);
+    let other_song_rows =
+        collect_artist_other_songs(cx, store, artists, artist_id, &mut tag_labels);
+
+    Some(ArtistDisplay {
+        artist_id,
+        override_key,
+        name: name.to_string().into(),
+        artwork,
+        has_custom_logo,
+        album_count: album_rows.len(),
+        other_song_count: other_song_rows.len(),
+        albums: album_rows,
+        other_songs: other_song_rows,
+        tag_counts: aggregate_tag_counts(tag_labels.iter().map(String::as_str)),
+    })
+}
+
 pub fn artist_thumbnail_path(
     store: &pulse_library::LibraryStore,
     artist_id: ArtistId,
@@ -297,6 +585,7 @@ pub fn collect_album_items(cx: &gpui::App) -> Vec<GridItem> {
 
             GridItem {
                 album_id: Some(album.id),
+                artist_id: None,
                 title: title.to_string().into(),
                 subtitle: artist_label.into(),
                 thumbnail,
@@ -324,17 +613,23 @@ pub fn collect_artist_items(cx: &gpui::App) -> Vec<GridItem> {
                 .and_then(|entry| entry.name.as_deref())
                 .unwrap_or(&artist.name);
 
-            let thumbnail = user_override
+            let custom_artwork = user_override
                 .and_then(|entry| entry.artwork.as_deref())
-                .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)))
+                .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)));
+
+            let thumbnail = custom_artwork
+                .clone()
                 .or_else(|| artist_thumbnail_path(store, artist_id));
+            let detail_artwork = custom_artwork
+                .or_else(|| artist_detail_artwork_path(store, artist_id));
 
             Some(GridItem {
                 album_id: None,
+                artist_id: Some(artist_id),
                 title: title.to_string().into(),
                 subtitle: SharedString::default(),
                 thumbnail,
-                detail_artwork: None,
+                detail_artwork,
             })
         })
         .collect()
@@ -446,6 +741,7 @@ pub fn resolve_album_display(
     let artists = store.artists();
 
     let artist_label = format_album_artists(artists, &album.album_artists);
+    let artist_entries = album_artist_entries(artists, &album.album_artists);
     let override_key = album_override_key(&album.title, &artist_label);
     let user_override = cx.global::<DataOverrides>().album(&override_key);
     let paths = cx.global::<DataPaths>();
@@ -489,6 +785,7 @@ pub fn resolve_album_display(
         override_key,
         title: title.to_string().into(),
         artists: artist_label.into(),
+        artist_entries,
         year: album.year,
         duration_ms: total_duration_ms,
         artwork,
@@ -531,6 +828,7 @@ pub struct MediaCardParams {
     pub layout: GridLayout,
     pub items: std::sync::Arc<[GridItem]>,
     pub on_album_open: Option<gpui::Entity<crate::components::pulse::Pulse>>,
+    pub on_artist_open: Option<gpui::Entity<crate::components::pulse::Pulse>>,
 }
 
 pub fn media_card(item: &GridItem, params: MediaCardParams, cx: &gpui::App) -> impl IntoElement {
@@ -543,6 +841,7 @@ pub fn media_card(item: &GridItem, params: MediaCardParams, cx: &gpui::App) -> i
     let items = params.items;
     let grid_id = params.grid_id;
     let on_album_open = params.on_album_open;
+    let on_artist_open = params.on_artist_open;
 
     let card = v_flex()
         .w(px(layout.cell_width))
@@ -558,7 +857,7 @@ pub fn media_card(item: &GridItem, params: MediaCardParams, cx: &gpui::App) -> i
                 .bg(theme.muted)
                 .border_1()
                 .border_color(theme.border)
-                .child(thumbnail_content(item.thumbnail.as_deref(), cx)),
+                .child(artwork_tile_content(item.thumbnail.as_deref(), cx)),
         )
         .child(grid_label(
             (grid_id, cell_ix.saturating_mul(2)),
@@ -590,6 +889,14 @@ pub fn media_card(item: &GridItem, params: MediaCardParams, cx: &gpui::App) -> i
             .on_click(move |_, _, cx| {
                 pulse.update(cx, |pulse, cx| {
                     pulse.open_album(album_id, cx);
+                });
+            })
+            .child(card)
+    } else if let (Some(pulse), Some(artist_id)) = (on_artist_open, item.artist_id) {
+        attach_hover(div().id(card_id).cursor_pointer(), items)
+            .on_click(move |_, _, cx| {
+                pulse.update(cx, |pulse, cx| {
+                    pulse.open_artist(artist_id, cx);
                 });
             })
             .child(card)
@@ -641,7 +948,7 @@ fn grid_label(
         .child(text)
 }
 
-fn thumbnail_content(path: Option<&Path>, cx: &gpui::App) -> AnyElement {
+pub fn artwork_tile_content(path: Option<&Path>, cx: &gpui::App) -> AnyElement {
     let theme = cx.theme();
 
     path.map_or_else(
@@ -726,5 +1033,15 @@ mod layout_tests {
     #[test]
     fn formats_album_duration_hours_only() {
         assert_eq!(format_album_duration_ms(3_600_000), "1 hr");
+    }
+
+    #[test]
+    fn aggregate_tag_counts_groups_and_sorts() {
+        let counts = aggregate_tag_counts(["Rock", "rock", "Jazz", "Rock"].iter().copied());
+        assert_eq!(counts.len(), 2);
+        assert_eq!(counts[0].label, "Rock");
+        assert_eq!(counts[0].count, 3);
+        assert_eq!(counts[1].label, "Jazz");
+        assert_eq!(counts[1].count, 1);
     }
 }

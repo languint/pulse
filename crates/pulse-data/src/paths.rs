@@ -108,6 +108,57 @@ impl PulsePaths {
             self.data.join(path)
         }
     }
+
+    /// Copies an image into [`Self::custom_artwork_dir`] and returns its data-relative path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DataError`] when directories cannot be created or the file cannot be copied.
+    pub fn import_custom_artwork(
+        &self,
+        basename: &str,
+        source: &Path,
+    ) -> Result<PathBuf, DataError> {
+        self.ensure_all()?;
+
+        let ext = source
+            .extension()
+            .and_then(|value| value.to_str())
+            .filter(|value| {
+                matches!(
+                    *value,
+                    "png"
+                        | "jpg"
+                        | "jpeg"
+                        | "webp"
+                        | "gif"
+                        | "PNG"
+                        | "JPG"
+                        | "JPEG"
+                        | "WEBP"
+                        | "GIF"
+                )
+            })
+            .unwrap_or("jpg");
+
+        let safe_name = basename
+            .chars()
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                    ch
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
+        let filename = format!("{safe_name}.{ext}");
+        let dest = self.custom_artwork_dir().join(&filename);
+
+        std::fs::copy(source, &dest)
+            .map_err(|source_error| DataError::write(&dest, source_error))?;
+
+        Ok(PathBuf::from("artwork/custom").join(filename))
+    }
 }
 
 fn platform_dir(lookup: fn() -> Option<PathBuf>, kind: &'static str) -> PathBuf {
@@ -146,5 +197,20 @@ mod tests {
             paths.resolve_data_path(Path::new("artwork/custom/cover.jpg")),
             PathBuf::from("/data/artwork/custom/cover.jpg")
         );
+    }
+
+    #[test]
+    fn import_custom_artwork_copies_into_data_dir() {
+        let temp = tempfile::tempdir().expect("tempdir creation should succeed");
+        let paths = PulsePaths::with_roots(temp.path(), temp.path(), temp.path());
+        let source = temp.path().join("source.png");
+        std::fs::write(&source, b"png").expect("file writing should succeed");
+
+        let relative = paths
+            .import_custom_artwork("artist-test", &source)
+            .expect("import should succeed");
+
+        assert_eq!(relative, PathBuf::from("artwork/custom/artist-test.png"));
+        assert!(paths.resolve_data_path(&relative).is_file());
     }
 }

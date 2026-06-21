@@ -8,6 +8,7 @@ gpui.workspace = true
 gpui_platform.workspace = true
 gpui-component.workspace = true
 gpui-component-assets.workspace = true
+rust-embed = "8"
 
 anyhow.workspace = true
 thiserror.workspace = true

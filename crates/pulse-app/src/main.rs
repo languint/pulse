@@ -7,7 +7,9 @@ pub mod artwork_prefetch;
 pub mod components;
 pub mod config;
 pub mod data;
+pub mod assets;
 pub mod error;
+pub mod icons;
 pub mod library;
 pub mod pulse;
 
@@ -16,7 +18,7 @@ use components::{library_roots_dialog::open_library_roots_dialog, pulse::Pulse};
 use pulse_keymap::KeymapAction;
 
 use crate::config::PulseConfig;
-use crate::data::{DataOverrides, DataPaths};
+use crate::data::{DataOverrides, DataPaths, OverridesGeneration};
 use crate::library::PulseLibrary;
 
 fn main() {
@@ -24,7 +26,7 @@ fn main() {
     tracing::info!("starting Pulse");
 
     gpui_platform::application()
-        .with_assets(gpui_component_assets::Assets)
+        .with_assets(assets::CombinedAssets)
         .run(move |cx| {
             gpui_component::init(cx);
             if let Err(error) = pulse_runtime::init(cx) {
@@ -57,6 +59,7 @@ fn main() {
 
             DataPaths::set_global(cx, DataPaths::new(paths.clone()));
             DataOverrides::set_global(cx, DataOverrides(overrides));
+            OverridesGeneration::set_global(cx, OverridesGeneration::default());
             PulseConfig::set_global(cx, config.clone());
 
             pulse::apply_theme(cx, &config.theme);

@@ -62,6 +62,15 @@ impl AlbumOverride {
 }
 
 impl ArtistOverride {
+    #[must_use]
+    pub const fn is_metadata_empty(&self) -> bool {
+        self.name.is_none()
+            && self.artwork.is_none()
+            && self.genres.is_none()
+            && self.tags.is_none()
+            && self.comment.is_none()
+    }
+
     /// User-added labels from both `genres` and `tags` override fields.
     #[must_use]
     pub fn user_labels(&self) -> Vec<String> {
@@ -165,6 +174,22 @@ impl UserOverrides {
         entry.genres = None;
     }
 
+    /// Replaces custom artist artwork stored under `artwork` in `overrides.json`.
+    pub fn set_artist_artwork(&mut self, key: String, artwork: Option<PathBuf>) {
+        if artwork.is_none() {
+            if let Some(entry) = self.artists.get_mut(&key) {
+                entry.artwork = None;
+                if entry.is_metadata_empty() {
+                    self.artists.remove(&key);
+                }
+            }
+            return;
+        }
+
+        let entry = self.artists.entry(key).or_default();
+        entry.artwork = artwork;
+    }
+
     #[must_use]
     pub fn resolve_artwork<'a>(
         paths: &'a PulsePaths,
@@ -234,6 +259,13 @@ fn collect_user_labels<'a>(labels: impl IntoIterator<Item = &'a str>) -> Vec<Str
 pub fn album_user_labels(override_entry: Option<&AlbumOverride>) -> Vec<String> {
     override_entry
         .map(AlbumOverride::user_labels)
+        .unwrap_or_default()
+}
+
+#[must_use]
+pub fn artist_user_labels(override_entry: Option<&ArtistOverride>) -> Vec<String> {
+    override_entry
+        .map(ArtistOverride::user_labels)
         .unwrap_or_default()
 }
 
@@ -323,5 +355,18 @@ mod tests {
         overrides.set_album_user_labels(key.clone(), &[]);
 
         assert!(overrides.album(&key).is_none());
+    }
+
+    #[test]
+    fn set_artist_artwork_clears_empty_entry() {
+        let mut overrides = UserOverrides::default();
+        let key = artist_override_key("Artist");
+        overrides.set_artist_artwork(
+            key.clone(),
+            Some(PathBuf::from("artwork/custom/artist.png")),
+        );
+        overrides.set_artist_artwork(key.clone(), None);
+
+        assert!(overrides.artist(&key).is_none());
     }
 }

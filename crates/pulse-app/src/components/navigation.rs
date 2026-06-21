@@ -1,4 +1,4 @@
-use pulse_model::AlbumId;
+use pulse_model::{AlbumId, ArtistId};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PulsePage {
@@ -6,6 +6,7 @@ pub enum PulsePage {
     Albums,
     Artists,
     AlbumDetail(AlbumId),
+    ArtistDetail(ArtistId),
 }
 
 impl PulsePage {
@@ -13,7 +14,7 @@ impl PulsePage {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Albums | Self::AlbumDetail(_) => "Albums",
-            Self::Artists => "Artists",
+            Self::Artists | Self::ArtistDetail(_) => "Artists",
         }
     }
 
@@ -23,10 +24,23 @@ impl PulsePage {
     }
 
     #[must_use]
+    pub const fn is_artists_section(self) -> bool {
+        matches!(self, Self::Artists | Self::ArtistDetail(_))
+    }
+
+    #[must_use]
     pub const fn album_detail(self) -> Option<AlbumId> {
         match self {
             Self::AlbumDetail(id) => Some(id),
-            Self::Albums | Self::Artists => None,
+            Self::Albums | Self::Artists | Self::ArtistDetail(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn artist_detail(self) -> Option<ArtistId> {
+        match self {
+            Self::ArtistDetail(id) => Some(id),
+            Self::Albums | Self::Artists | Self::AlbumDetail(_) => None,
         }
     }
 }

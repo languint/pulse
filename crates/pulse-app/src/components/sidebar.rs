@@ -58,11 +58,11 @@ impl Render for AppSidebar {
                         .child(
                             SidebarMenuItem::new(PulsePage::Artists.label())
                                 .icon(IconName::User)
-                                .active(page == PulsePage::Artists)
+                                .active(page.is_artists_section())
                                 .on_click({
                                     move |_, _, cx| {
                                         pulse.update(cx, |pulse, cx| {
-                                            pulse.set_page(PulsePage::Artists, cx);
+                                            pulse.show_artists(cx);
                                         });
                                     }
                                 }),
