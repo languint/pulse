@@ -1,3 +1,3 @@
 use gpui::actions;
 
-actions!(pulse, [ToggleFullscreen]);
+actions!(pulse, [ToggleFullscreen, Quit]);

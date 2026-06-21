@@ -1,5 +1,5 @@
 use gpui::{AppContext, UpdateGlobal, WindowOptions};
-use gpui_component::Root;
+use gpui_component::{Root, TitleBar};
 
 pub mod actions;
 pub mod components;
@@ -7,7 +7,7 @@ pub mod config;
 pub mod error;
 pub mod pulse;
 
-use actions::ToggleFullscreen;
+use actions::{Quit, ToggleFullscreen};
 use components::pulse::Pulse;
 use pulse_keymap::{PulseActionBindings, PulseKeymap};
 
@@ -32,9 +32,19 @@ fn main() {
                 },
             );
 
+            cx.on_action(|_: &Quit, cx| {
+                cx.quit();
+            });
+
+            cx.on_action(|_: &ToggleFullscreen, cx| {
+                if let Some(window) = cx.active_window() {
+                    let _ = window.update(cx, |_, window, _| window.toggle_fullscreen());
+                }
+            });
+
             cx.spawn(async move |cx| {
                 let window_options = WindowOptions {
-                    titlebar: None,
+                    titlebar: Some(TitleBar::title_bar_options()),
                     ..Default::default()
                 };
 

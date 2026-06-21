@@ -1,52 +1,32 @@
-use gpui::{InteractiveElement, ParentElement, Pixels, Styled, div, px};
-use gpui_component::ActiveTheme;
-
-use crate::components::{
-    toolbar::controls::ToolbarControls,
-    ui::stack::{ItemAlignment, Stack, StackDirection},
+use gpui::{
+    Context, Entity, InteractiveElement, MouseButton, ParentElement, Render, Styled, Window, div,
 };
-pub mod controls;
-pub mod menubar;
+use gpui_component::{TitleBar, menu::AppMenuBar};
 
-pub struct Toolbar;
+pub mod menus;
 
-pub const TOOLBAR_HEIGHT: Pixels = px(32.);
+pub struct Toolbar {
+    app_menu_bar: Entity<AppMenuBar>,
+}
 
-impl gpui::Render for Toolbar {
-    fn render(
-        &mut self,
-        window: &mut gpui::Window,
-        cx: &mut gpui::Context<Self>,
-    ) -> impl gpui::IntoElement {
-        let theme = cx.theme();
-
-        let mut empty_filler = div()
-            .flex_1()
-            .h_full()
-            .window_control_area(gpui::WindowControlArea::Drag);
-
-        #[cfg(target_os = "windows")]
-        {
-            empty_filler = empty_filler.on_mouse_move(|_, window, _| window.refresh());
+impl Toolbar {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        Self {
+            app_menu_bar: menus::init(cx),
         }
+    }
+}
 
-        let toolbar = Stack::new(StackDirection::Horizontal)
-            .align(ItemAlignment::Center)
-            .id("toolbar")
-            .h(TOOLBAR_HEIGHT)
-            .w_full()
-            .content_stretch()
-            .px(px(8.))
-            .pr(px(0.))
-            .bg(theme.tokens.title_bar)
-            .border_b_1()
-            .border_color(theme.title_bar_border)
-            .child(empty_filler);
-
-        if !window.is_fullscreen() {
-            return toolbar.child(ToolbarControls);
-        }
-
-        toolbar
+impl Render for Toolbar {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl gpui::IntoElement {
+        TitleBar::new().child(
+            div()
+                .flex()
+                .items_center()
+                .h_full()
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .child(self.app_menu_bar.clone()),
+        )
     }
 }

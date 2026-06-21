@@ -1,10 +1,7 @@
 use gpui::Global;
-// use pulse_theme::PulseTheme;
 
 #[derive(Clone, Copy)]
-pub struct PulseConfig {
-    // pub theme: PulseTheme,
-}
+pub struct PulseConfig {}
 
 impl Global for PulseConfig {}
 
