@@ -9,7 +9,7 @@ pub mod pulse;
 
 use actions::{Quit, ToggleFullscreen};
 use components::pulse::Pulse;
-use pulse_keymap::{PulseActionBindings, PulseKeymap};
+use pulse_keymap::KeymapAction;
 
 use crate::config::PulseConfig;
 
@@ -23,14 +23,12 @@ fn main() {
             gpui_component::init(cx);
             pulse::init(cx);
 
-            PulseConfig::set_global(cx, PulseConfig {});
-
-            PulseKeymap::default().bind(
-                cx,
-                PulseActionBindings {
-                    toggle_fullscreen: ToggleFullscreen,
-                },
-            );
+            let config = PulseConfig::default();
+            config
+                .keymap
+                .bind_action(cx, KeymapAction::ToggleFullscreen, ToggleFullscreen);
+            config.keymap.bind_action(cx, KeymapAction::Quit, Quit);
+            PulseConfig::set_global(cx, config);
 
             cx.on_action(|_: &Quit, cx| {
                 cx.quit();

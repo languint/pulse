@@ -1,7 +1,27 @@
-use gpui::Global;
+use std::collections::HashMap;
 
-#[derive(Clone, Copy)]
-pub struct PulseConfig {}
+use gpui::Global;
+use pulse_keymap::{KeymapAction, PulseKeymap};
+
+#[derive(Clone)]
+pub struct PulseConfig {
+    pub keymap: PulseKeymap,
+}
+
+impl Default for PulseConfig {
+    fn default() -> Self {
+        Self {
+            keymap: PulseKeymap::default(),
+        }
+    }
+}
+
+impl PulseConfig {
+    pub fn with_keymap_overrides(mut self, overrides: HashMap<KeymapAction, Vec<String>>) -> Self {
+        self.keymap.apply_overrides(&overrides);
+        self
+    }
+}
 
 impl Global for PulseConfig {}
 

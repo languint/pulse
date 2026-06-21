@@ -1,17 +1,21 @@
 use gpui::{Action, App, KeyBinding};
 
-use crate::PulseKeymap;
+use crate::{KeymapAction, PulseKeymap};
 
-pub struct PulseActionBindings<A> {
-    pub toggle_fullscreen: A,
+pub fn bind_keystrokes<A: Action + Clone>(cx: &mut App, keystrokes: &[String], action: A) {
+    if keystrokes.is_empty() {
+        return;
+    }
+
+    cx.bind_keys(
+        keystrokes
+            .iter()
+            .map(|keystroke| KeyBinding::new(keystroke.as_str(), action.clone(), None)),
+    );
 }
 
 impl PulseKeymap {
-    pub fn bind<A: Action + Clone>(&self, cx: &mut App, actions: PulseActionBindings<A>) {
-        if !self.pulse.toggle_fullscreen.is_empty() {
-            cx.bind_keys(self.pulse.toggle_fullscreen.iter().map(|keystroke| {
-                KeyBinding::new(*keystroke, actions.toggle_fullscreen.clone(), None)
-            }));
-        }
+    pub fn bind_action<A: Action + Clone>(&self, cx: &mut App, id: KeymapAction, action: A) {
+        bind_keystrokes(cx, self.keystrokes_for(id), action);
     }
 }

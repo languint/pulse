@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 gpui.workspace = true
+serde.workspace = true
 
 [lints]
 workspace = true

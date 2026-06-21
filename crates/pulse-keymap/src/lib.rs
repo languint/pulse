@@ -1,29 +1,13 @@
-use crate::pulse::PulseKeys;
+mod action;
+mod bindings;
+mod keymap;
 
-pub mod bindings;
-pub mod pulse;
-
-pub use bindings::PulseActionBindings;
-
-#[derive(Debug, Clone)]
-pub struct PulseKeymap {
-    pub name: &'static str,
-
-    pub pulse: PulseKeys,
-}
-
-impl Default for PulseKeymap {
-    fn default() -> Self {
-        Self {
-            name: "Pulse",
-            pulse: PulseKeys::default(),
-        }
-    }
-}
+pub use action::KeymapAction;
+pub use bindings::bind_keystrokes;
+pub use keymap::PulseKeymap;
 
 #[cfg(test)]
 mod tests {
-    use super::pulse::PulseKeys;
     use super::*;
 
     #[test]
@@ -34,8 +18,21 @@ mod tests {
     #[test]
     fn default_toggle_fullscreen_binding() {
         assert_eq!(
-            PulseKeys::default().toggle_fullscreen,
-            vec!["f11"]
+            PulseKeymap::default().keystrokes_for(KeymapAction::ToggleFullscreen),
+            &["f11".to_string(), "ctrl-f".to_string()]
+        );
+    }
+
+    #[test]
+    fn with_binding_overrides_defaults() {
+        let keymap = PulseKeymap::default().with_binding(
+            KeymapAction::ToggleFullscreen,
+            vec!["ctrl-shift-f".into()],
+        );
+
+        assert_eq!(
+            keymap.keystrokes_for(KeymapAction::ToggleFullscreen),
+            &["ctrl-shift-f".to_string()]
         );
     }
 }
