@@ -1,3 +1,13 @@
 use gpui::actions;
 
-actions!(pulse, [ToggleFullscreen, Quit, ManageLibraryRoots]);
+actions!(
+    pulse,
+    [
+        ToggleFullscreen,
+        Quit,
+        ManageLibraryRoots,
+        MediaPlayPause,
+        MediaNextTrack,
+        MediaPreviousTrack
+    ]
+);

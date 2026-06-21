@@ -90,10 +90,7 @@ mod tests {
         let temp = tempfile::tempdir()?;
         let path = temp.path().join("keymap.json");
         let file = KeymapFile {
-            bindings: HashMap::from([(
-                KeymapAction::Quit,
-                vec!["ctrl-shift-q".into()],
-            )]),
+            bindings: HashMap::from([(KeymapAction::Quit, vec!["ctrl-shift-q".into()])]),
         };
 
         file.save_to(&path)?;

@@ -74,9 +74,9 @@ impl PulseLibrary {
 
         tracing::info!(?config, "updating music library roots");
 
-        if let Err(error) = Self::update_global(cx, |library, _| {
-            library.0.set_config(config, false)
-        }) {
+        if let Err(error) =
+            Self::update_global(cx, |library, _| library.0.set_config(config, false))
+        {
             tracing::error!(%error, "failed to update library configuration");
         }
 
@@ -130,7 +130,10 @@ impl PulseLibrary {
     fn apply_scan(
         async_cx: &AsyncApp,
         scanned: Result<
-            (MusicLibrary, Result<ScanSummary, pulse_library::LibraryError>),
+            (
+                MusicLibrary,
+                Result<ScanSummary, pulse_library::LibraryError>,
+            ),
             pulse_runtime::JoinError,
         >,
     ) {

@@ -1,11 +1,7 @@
 use gpui::{Context, Entity, ParentElement, Render, Styled, Window, div, px};
 use gpui_component::{
-    h_flex,
-    IconName,
-    sidebar::{
-        Sidebar as SidebarPanel, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem,
-    },
-    StyledExt as _,
+    IconName, StyledExt as _, h_flex,
+    sidebar::{Sidebar as SidebarPanel, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem},
 };
 
 use crate::components::{

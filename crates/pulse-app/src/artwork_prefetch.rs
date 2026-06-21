@@ -43,8 +43,6 @@ fn prefetch_image_path(cx: &mut App, path: &Path) {
     }
 
     let resource: Resource = path.to_path_buf().into();
-    // Safe during input dispatch: starts a background load without touching the window
-    // paint/layout state. Decoded images are cached for subsequent `img()` elements.
     let (_task, _is_first) = cx.fetch_asset::<ImgResourceLoader>(&resource);
 }
 

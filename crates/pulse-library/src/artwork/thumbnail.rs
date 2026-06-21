@@ -6,7 +6,8 @@ use pulse_model::ThumbnailSize;
 use crate::error::LibraryError;
 
 pub fn generate_thumbnail(data: &[u8], size: u32) -> Result<Vec<u8>, LibraryError> {
-    let image = image::load_from_memory(data).map_err(|source| LibraryError::ArtworkDecode { source })?;
+    let image =
+        image::load_from_memory(data).map_err(|source| LibraryError::ArtworkDecode { source })?;
 
     let thumbnail = image.resize_to_fill(size, size, image::imageops::FilterType::Triangle);
 
@@ -19,7 +20,8 @@ pub fn generate_thumbnail(data: &[u8], size: u32) -> Result<Vec<u8>, LibraryErro
 }
 
 pub fn image_dimensions(data: &[u8]) -> Result<(u32, u32), LibraryError> {
-    let image = image::load_from_memory(data).map_err(|source| LibraryError::ArtworkDecode { source })?;
+    let image =
+        image::load_from_memory(data).map_err(|source| LibraryError::ArtworkDecode { source })?;
 
     Ok(image.dimensions())
 }

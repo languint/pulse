@@ -8,10 +8,7 @@ const PULSE_PATH: &str = "M6 31.5H15.75L22.25 41L32 22L41.75 41L48.25 31.5H58";
 pub fn pulse_logo(size: Pixels, cx: &App) -> impl IntoElement {
     let theme = cx.theme();
     let svg = pulse_logo_svg(theme.primary, theme.primary_hover, theme.secondary);
-    let image = Arc::new(Image::from_bytes(
-        ImageFormat::Svg,
-        svg.into_bytes(),
-    ));
+    let image = Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()));
 
     img(image).size(size).flex_shrink_0()
 }
@@ -40,7 +37,11 @@ fn pulse_logo_svg(primary: Hsla, primary_shade: Hsla, surface: Hsla) -> String {
     )
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::as_conversions)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::as_conversions
+)]
 fn hex_color(color: Hsla) -> String {
     let rgb = color.to_rgb();
     format!(

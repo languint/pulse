@@ -49,7 +49,9 @@ impl ArtistsPage {
     }
 
     fn ensure_item_sizes(&mut self, layout: GridLayout) {
-        if layout == self.cached_layout && self.cached_item_sizes.len() == self.cached_items.len().div_ceil(layout.columns) {
+        if layout == self.cached_layout
+            && self.cached_item_sizes.len() == self.cached_items.len().div_ceil(layout.columns)
+        {
             return;
         }
 

@@ -11,10 +11,7 @@ pub fn init(cx: &mut App) -> Entity<AppMenuBar> {
 
 fn update_app_menu(app_menu_bar: &Entity<AppMenuBar>, cx: &mut App) {
     cx.set_menus(build_menus());
-    let menus = build_menus()
-        .into_iter()
-        .map(gpui::Menu::owned)
-        .collect();
+    let menus = build_menus().into_iter().map(gpui::Menu::owned).collect();
     GlobalState::global_mut(cx).set_app_menus(menus);
 
     app_menu_bar.update(cx, |menu_bar, cx| {

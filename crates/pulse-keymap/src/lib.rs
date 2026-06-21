@@ -25,10 +25,8 @@ mod tests {
 
     #[test]
     fn with_binding_overrides_defaults() {
-        let keymap = PulseKeymap::default().with_binding(
-            KeymapAction::ToggleFullscreen,
-            vec!["ctrl-shift-f".into()],
-        );
+        let keymap = PulseKeymap::default()
+            .with_binding(KeymapAction::ToggleFullscreen, vec!["ctrl-shift-f".into()]);
 
         assert_eq!(
             keymap.keystrokes_for(KeymapAction::ToggleFullscreen),

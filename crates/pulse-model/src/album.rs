@@ -1,8 +1,4 @@
-use crate::{
-    artist::AlbumArtists,
-    artwork::ArtworkId,
-    metadata::EntityMetadata,
-};
+use crate::{artist::AlbumArtists, artwork::ArtworkId, metadata::EntityMetadata};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AlbumId(pub u64);

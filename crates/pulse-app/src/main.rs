@@ -4,22 +4,28 @@ use gpui_component::{Root, TitleBar};
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod actions;
 pub mod artwork_prefetch;
+pub mod assets;
 pub mod components;
 pub mod config;
 pub mod data;
-pub mod assets;
 pub mod error;
 pub mod icons;
 pub mod library;
+pub mod media_controls;
+pub mod player;
 pub mod pulse;
 
-use actions::{ManageLibraryRoots, Quit, ToggleFullscreen};
+use actions::{
+    ManageLibraryRoots, MediaNextTrack, MediaPlayPause, MediaPreviousTrack, Quit, ToggleFullscreen,
+};
 use components::{library_roots_dialog::open_library_roots_dialog, pulse::Pulse};
 use pulse_keymap::KeymapAction;
 
 use crate::config::PulseConfig;
 use crate::data::{DataOverrides, DataPaths, OverridesGeneration};
 use crate::library::PulseLibrary;
+use crate::media_controls::MediaCommand;
+use crate::player::PulsePlayer;
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -56,6 +62,15 @@ fn main() {
                 .keymap
                 .bind_action(cx, KeymapAction::ManageLibraryRoots, &ManageLibraryRoots);
             config.keymap.bind_action(cx, KeymapAction::Quit, &Quit);
+            config
+                .keymap
+                .bind_action(cx, KeymapAction::MediaPlayPause, &MediaPlayPause);
+            config
+                .keymap
+                .bind_action(cx, KeymapAction::MediaNextTrack, &MediaNextTrack);
+            config
+                .keymap
+                .bind_action(cx, KeymapAction::MediaPreviousTrack, &MediaPreviousTrack);
 
             DataPaths::set_global(cx, DataPaths::new(paths.clone()));
             DataOverrides::set_global(cx, DataOverrides(overrides));
@@ -65,6 +80,7 @@ fn main() {
             pulse::apply_theme(cx, &config.theme);
 
             PulseLibrary::init(cx, config.library.clone(), paths.artwork_cache_dir());
+            PulsePlayer::init(cx);
 
             cx.on_action(|_: &ManageLibraryRoots, cx| {
                 if let Some(window) = cx.active_window() {
@@ -84,6 +100,18 @@ fn main() {
                 }
             });
 
+            cx.on_action(|_: &MediaPlayPause, cx| {
+                media_controls::dispatch(MediaCommand::TogglePlayback, cx);
+            });
+
+            cx.on_action(|_: &MediaNextTrack, cx| {
+                media_controls::dispatch(MediaCommand::Next, cx);
+            });
+
+            cx.on_action(|_: &MediaPreviousTrack, cx| {
+                media_controls::dispatch(MediaCommand::Previous, cx);
+            });
+
             cx.spawn(async move |cx| {
                 let window_options = WindowOptions {
                     titlebar: Some(TitleBar::title_bar_options()),
@@ -91,6 +119,7 @@ fn main() {
                 };
 
                 if let Err(e) = cx.open_window(window_options, |window, cx| {
+                    media_controls::init(window, cx);
                     let pulse = cx.new(Pulse::new);
                     let focus_handle = pulse.read(cx).focus_handle.clone();
                     window.focus(&focus_handle, cx);

@@ -10,6 +10,7 @@ use crate::{
         library_roots_dialog::open_library_roots_dialog,
         navigation::PulsePage,
         pages::{AlbumViewerPage, AlbumsPage, ArtistViewerPage, ArtistsPage},
+        player_bar::PlayerBar,
         sidebar::AppSidebar,
         toolbar::Toolbar,
     },
@@ -29,6 +30,7 @@ pub struct Pulse {
     artists_page: Entity<ArtistsPage>,
     album_viewer_page: Entity<AlbumViewerPage>,
     artist_viewer_page: Entity<ArtistViewerPage>,
+    player_bar: Entity<PlayerBar>,
 }
 
 impl Pulse {
@@ -45,6 +47,7 @@ impl Pulse {
             artists_page: cx.new(|cx| ArtistsPage::new(pulse.clone(), cx)),
             album_viewer_page: cx.new(|cx| AlbumViewerPage::new(pulse.clone(), cx)),
             artist_viewer_page: cx.new(|cx| ArtistViewerPage::new(pulse.clone(), cx)),
+            player_bar: cx.new(PlayerBar::new),
         }
     }
 
@@ -167,6 +170,7 @@ impl Render for Pulse {
                             .child(main_page),
                     ),
             )
+            .child(self.player_bar.clone())
             .children(dialog_layer);
 
         // This is needed for now since there is a bug in gpui

@@ -75,10 +75,7 @@ impl MusicLibrary {
             Ok(entries) => entries,
             Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(source) => {
-                return Err(LibraryError::Io {
-                    path: root,
-                    source,
-                });
+                return Err(LibraryError::Io { path: root, source });
             }
         };
 
@@ -88,13 +85,13 @@ impl MusicLibrary {
             }
 
             let hash = entry.file_name().to_string_lossy().into_owned();
-            let Some(meta) = self
-                .artwork_cache
-                .cached_artwork(&hash)
-                .map_err(|source| LibraryError::Io {
-                    path: self.artwork_cache.meta_path_for(&hash),
-                    source,
-                })?
+            let Some(meta) =
+                self.artwork_cache
+                    .cached_artwork(&hash)
+                    .map_err(|source| LibraryError::Io {
+                        path: self.artwork_cache.meta_path_for(&hash),
+                        source,
+                    })?
             else {
                 continue;
             };

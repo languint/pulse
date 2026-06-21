@@ -11,7 +11,7 @@ use lofty::{
 use pulse_model::{AlbumArtists, ArtworkReference, EntityMetadata, Song};
 
 use crate::{
-    artwork::{extract_cover_art, ingest_embedded_art, ArtworkCache},
+    artwork::{ArtworkCache, extract_cover_art, ingest_embedded_art},
     error::LibraryError,
     store::LibraryStore,
 };

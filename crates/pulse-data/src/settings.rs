@@ -52,7 +52,8 @@ impl PulseSettings {
             return Ok(Self::default());
         }
 
-        let text = std::fs::read_to_string(&path).map_err(|source| DataError::read(&path, source))?;
+        let text =
+            std::fs::read_to_string(&path).map_err(|source| DataError::read(&path, source))?;
         toml::from_str(&text).map_err(|source| DataError::Parse {
             path,
             source: Box::new(source),

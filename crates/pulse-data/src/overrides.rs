@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 
 use crate::{DataError, PulsePaths};
 
-/// User-provided metadata overrides.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct UserOverrides {
     #[serde(default)]
@@ -140,16 +139,8 @@ impl UserOverrides {
     #[must_use]
     pub fn all_user_labels(&self) -> Vec<String> {
         let mut labels = Vec::new();
-        labels.extend(
-            self.albums
-                .values()
-                .flat_map(AlbumOverride::user_labels),
-        );
-        labels.extend(
-            self.artists
-                .values()
-                .flat_map(ArtistOverride::user_labels),
-        );
+        labels.extend(self.albums.values().flat_map(AlbumOverride::user_labels));
+        labels.extend(self.artists.values().flat_map(ArtistOverride::user_labels));
         labels.extend(self.songs.values().flat_map(SongOverride::user_labels));
         dedupe_user_labels(&labels)
     }
@@ -222,10 +213,7 @@ fn dedupe_user_labels(labels: &[String]) -> Vec<String> {
     collect_user_labels(labels.iter().map(String::as_str))
 }
 
-fn override_entry_labels(
-    genres: Option<&Vec<String>>,
-    tags: Option<&Vec<String>>,
-) -> Vec<String> {
+fn override_entry_labels(genres: Option<&Vec<String>>, tags: Option<&Vec<String>>) -> Vec<String> {
     collect_user_labels(
         genres
             .into_iter()

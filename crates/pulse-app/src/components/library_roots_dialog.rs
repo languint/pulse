@@ -1,15 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use gpui::{
-    App, AppContext, Context, InteractiveElement, ParentElement, Render, StatefulInteractiveElement,
-    Styled, Window, div, px,
+    App, AppContext, Context, InteractiveElement, ParentElement, Render,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 use gpui_component::{
     ActiveTheme, IconName, WindowExt as _,
     button::{Button, ButtonVariants as _},
     dialog::{DialogFooter, DialogTitle},
-    h_flex,
-    v_flex,
+    h_flex, v_flex,
 };
 use pulse_library::LibraryConfig;
 
@@ -154,8 +153,8 @@ impl Render for LibraryRootsEditor {
                     .child("No library folders configured."),
             );
         } else {
-            list_container = list_container.child(
-                v_flex().children(rows.into_iter().enumerate().map(|(row_ix, row)| {
+            list_container = list_container.child(v_flex().children(
+                rows.into_iter().enumerate().map(|(row_ix, row)| {
                     h_flex()
                         .id(("library-root-row", row_ix))
                         .w_full()
@@ -185,8 +184,8 @@ impl Render for LibraryRootsEditor {
                                     editor.delete_row(row_ix, cx);
                                 })),
                         )
-                })),
-            );
+                }),
+            ));
         }
 
         v_flex()
@@ -213,31 +212,28 @@ pub fn open_library_roots_dialog(window: &mut Window, cx: &mut App) {
 
     window.open_dialog(cx, move |dialog, _, _| {
         let editor_apply = editor.clone();
-        dialog
-            .w(px(560.))
-            .child(editor.clone())
-            .footer(
-                DialogFooter::new()
-                    .gap_2()
-                    .child(
-                        Button::new("cancel-roots")
-                            .label("Cancel")
-                            .outline()
-                            .on_click(|_, window, cx| {
-                                window.close_dialog(cx);
-                            }),
-                    )
-                    .child(
-                        Button::new("apply-roots")
-                            .label("Apply & Rescan")
-                            .primary()
-                            .on_click(move |_, window, cx| {
-                                let config = editor_apply.read(cx).config().clone();
-                                PulseLibrary::apply_config(cx, config);
-                                window.close_dialog(cx);
-                            }),
-                    ),
-            )
+        dialog.w(px(560.)).child(editor.clone()).footer(
+            DialogFooter::new()
+                .gap_2()
+                .child(
+                    Button::new("cancel-roots")
+                        .label("Cancel")
+                        .outline()
+                        .on_click(|_, window, cx| {
+                            window.close_dialog(cx);
+                        }),
+                )
+                .child(
+                    Button::new("apply-roots")
+                        .label("Apply & Rescan")
+                        .primary()
+                        .on_click(move |_, window, cx| {
+                            let config = editor_apply.read(cx).config().clone();
+                            PulseLibrary::apply_config(cx, config);
+                            window.close_dialog(cx);
+                        }),
+                ),
+        )
     });
 }
 

@@ -44,7 +44,6 @@ impl PulsePage {
         }
     }
 
-    /// Top-level list page for this section, used when there is no navigation history.
     #[must_use]
     pub const fn section_fallback(self) -> Self {
         match self {

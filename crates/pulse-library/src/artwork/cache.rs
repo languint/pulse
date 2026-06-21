@@ -48,10 +48,10 @@ impl ArtworkCache {
 
     #[must_use]
     pub fn thumbnail_path(&self, content_hash: &str, size: ThumbnailSize) -> PathBuf {
-        self.root.join("thumbnails").join(content_hash).join(format!(
-            "{}.jpg",
-            size.pixels()
-        ))
+        self.root
+            .join("thumbnails")
+            .join(content_hash)
+            .join(format!("{}.jpg", size.pixels()))
     }
 
     fn meta_path(&self, content_hash: &str) -> PathBuf {
@@ -80,7 +80,10 @@ impl ArtworkCache {
     /// # Errors
     ///
     /// Returns an I/O or JSON error when metadata cannot be read or inferred.
-    pub fn cached_artwork(&self, content_hash: &str) -> Result<Option<CachedArtworkMeta>, std::io::Error> {
+    pub fn cached_artwork(
+        &self,
+        content_hash: &str,
+    ) -> Result<Option<CachedArtworkMeta>, std::io::Error> {
         if !self.thumbnails_complete(content_hash) {
             return Ok(None);
         }
@@ -88,13 +91,9 @@ impl ArtworkCache {
         let meta_path = self.meta_path(content_hash);
         if meta_path.is_file() {
             let raw = std::fs::read_to_string(&meta_path)?;
-            let meta: CachedArtworkMeta = serde_json::from_str(&raw).map_err(|source| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, source)
-            })?;
-            if self
-                .source_file(content_hash, &meta.extension)
-                .is_file()
-            {
+            let meta: CachedArtworkMeta = serde_json::from_str(&raw)
+                .map_err(|source| std::io::Error::new(std::io::ErrorKind::InvalidData, source))?;
+            if self.source_file(content_hash, &meta.extension).is_file() {
                 return Ok(Some(meta));
             }
             return Ok(None);
@@ -105,9 +104,8 @@ impl ArtworkCache {
         };
 
         let medium = self.thumbnail_path(content_hash, ThumbnailSize::Medium);
-        let (width, height) = image::image_dimensions(&medium).map_err(|source| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, source)
-        })?;
+        let (width, height) = image::image_dimensions(&medium)
+            .map_err(|source| std::io::Error::new(std::io::ErrorKind::InvalidData, source))?;
         Ok(Some(CachedArtworkMeta {
             width,
             height,
@@ -129,9 +127,8 @@ impl ArtworkCache {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let json = serde_json::to_string(meta).map_err(|source| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, source)
-        })?;
+        let json = serde_json::to_string(meta)
+            .map_err(|source| std::io::Error::new(std::io::ErrorKind::InvalidData, source))?;
         std::fs::write(path, json)
     }
 

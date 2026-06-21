@@ -56,6 +56,22 @@ fn default_bindings() -> HashMap<KeymapAction, Vec<String>> {
             KeymapAction::ManageLibraryRoots,
             vec!["ctrl-shift-l".into()],
         ),
+        (
+            KeymapAction::MediaPlayPause,
+            vec![
+                "mediaplaypause".into(),
+                "xf86audioplay".into(),
+                "xf86audiopause".into(),
+            ],
+        ),
+        (
+            KeymapAction::MediaNextTrack,
+            vec!["medianexttrack".into(), "xf86audionext".into()],
+        ),
+        (
+            KeymapAction::MediaPreviousTrack,
+            vec!["mediaprevtrack".into(), "xf86audioprev".into()],
+        ),
     ])
 }
 

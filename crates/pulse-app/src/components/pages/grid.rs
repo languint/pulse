@@ -1,12 +1,14 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui::{AnyElement, App, Entity, IntoElement, ParentElement, Render, Styled, div, px, Pixels, Size};
+use gpui::{
+    AnyElement, App, Entity, IntoElement, ParentElement, Pixels, Render, Size, Styled, div, px,
+};
 use gpui_component::{VirtualListScrollHandle, v_virtual_list};
 
 use crate::components::pulse::Pulse;
 
-use super::common::{self, GridItem, GridLayout, GRID_ROW_GAP, media_card, MediaCardParams};
+use super::common::{self, GRID_ROW_GAP, GridItem, GridLayout, MediaCardParams, media_card};
 
 pub struct VirtualThumbnailGridParams<'a> {
     pub grid_id: &'static str,

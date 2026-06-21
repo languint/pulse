@@ -125,7 +125,7 @@ mod tests {
     use pulse_model::{ArtworkReference, ThumbnailSize};
 
     use crate::{
-        artwork::{ingest_embedded_art, ArtworkCache},
+        artwork::{ArtworkCache, ingest_embedded_art},
         store::LibraryStore,
     };
 
@@ -167,8 +167,8 @@ mod tests {
         });
 
         let png = sample_png()?;
-        let artwork_id = ingest_embedded_art(&mut store, &cache, song_id, &png)?
-            .ok_or("expected artwork id")?;
+        let artwork_id =
+            ingest_embedded_art(&mut store, &cache, song_id, &png)?.ok_or("expected artwork id")?;
 
         if store.artworks().len() != 1 {
             return Err("expected one artwork entry".into());
@@ -190,7 +190,12 @@ mod tests {
         {
             return Err("expected song artwork link".into());
         }
-        if store.albums().get(&album).and_then(|album| album.artwork_id) != Some(artwork_id) {
+        if store
+            .albums()
+            .get(&album)
+            .and_then(|album| album.artwork_id)
+            != Some(artwork_id)
+        {
             return Err("expected album artwork link".into());
         }
 
@@ -253,14 +258,13 @@ mod tests {
             metadata: pulse_model::EntityMetadata::new(),
         });
 
-        let artwork_id = ingest_embedded_art(&mut store, &cache, song_id, &png)?
-            .ok_or("expected artwork id")?;
+        let artwork_id =
+            ingest_embedded_art(&mut store, &cache, song_id, &png)?.ok_or("expected artwork id")?;
 
         if store.artworks().len() != 1 {
             return Err("expected artwork restored from disk cache".into());
         }
-        if store.artwork_id_for_hash(blake3::hash(&png).to_hex().as_ref()) != Some(artwork_id)
-        {
+        if store.artwork_id_for_hash(blake3::hash(&png).to_hex().as_ref()) != Some(artwork_id) {
             return Err("expected artwork hash lookup".into());
         }
 

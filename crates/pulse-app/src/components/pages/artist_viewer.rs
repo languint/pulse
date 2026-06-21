@@ -12,11 +12,12 @@ use gpui_component::{
     tag::Tag,
     v_flex, v_virtual_list,
 };
-use pulse_model::{AlbumId, ArtistId};
+use pulse_model::{AlbumId, ArtistId, SongId};
 
 use crate::components::pulse::Pulse;
 use crate::data::{import_and_save_artist_logo, save_artist_artwork};
 use crate::icons::PulseIcon;
+use crate::player::PulsePlayer;
 
 use super::common::{
     ArtistDisplay, CatalogFingerprint, TagCount, artwork_tile_content, catalog_fingerprint,
@@ -42,6 +43,7 @@ enum ArtistListRowKind {
         stripe: bool,
     },
     Song {
+        song_id: SongId,
         title: SharedString,
         subtitle: SharedString,
         duration: SharedString,
@@ -200,13 +202,36 @@ impl ArtistViewerPage {
             )
             .into_any_element(),
             ArtistListRowKind::Song {
+                song_id,
                 title,
                 subtitle,
                 duration,
                 artwork,
                 stripe,
-            } => song_row(title, subtitle, duration, artwork.as_deref(), *stripe, cx)
-                .into_any_element(),
+            } => {
+                let song_ids: Vec<_> = self
+                    .display
+                    .as_ref()
+                    .map(|display| {
+                        display
+                            .other_songs
+                            .iter()
+                            .map(|song| song.song_id)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                song_row(
+                    *song_id,
+                    title,
+                    subtitle,
+                    duration,
+                    artwork.as_deref(),
+                    *stripe,
+                    &song_ids,
+                    cx,
+                )
+                .into_any_element()
+            }
             ArtistListRowKind::SectionSpacer => div().h(px(SECTION_GAP)).into_any_element(),
         }
     }
@@ -521,23 +546,31 @@ fn album_row(
         })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn song_row(
+    song_id: SongId,
     title: &SharedString,
     subtitle: &SharedString,
     duration: &SharedString,
     artwork: Option<&std::path::Path>,
     stripe: bool,
+    queue: &[SongId],
     cx: &gpui::App,
 ) -> impl IntoElement {
     let theme = cx.theme();
+    let index = queue.iter().position(|id| *id == song_id).unwrap_or(0);
+    let queue = queue.to_vec();
 
     h_flex()
+        .id(("artist-song", song_id.0))
         .w_full()
         .h(px(ROW_HEIGHT))
         .items_center()
         .gap_3()
         .px_2()
+        .cursor_pointer()
         .when(stripe, |this| this.bg(theme.list_even))
+        .on_click(move |_, _, cx| PulsePlayer::play_songs(cx, &queue, index))
         .child(row_artwork(artwork, cx))
         .child(
             v_flex()
@@ -607,6 +640,7 @@ fn build_artist_list_rows(display: &ArtistDisplay) -> Vec<ArtistListRow> {
         for (index, song) in display.other_songs.iter().enumerate() {
             rows.push(ArtistListRow {
                 kind: ArtistListRowKind::Song {
+                    song_id: song.song_id,
                     title: song.title.clone(),
                     subtitle: song.subtitle.clone(),
                     duration: song.duration.clone(),

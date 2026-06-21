@@ -9,7 +9,9 @@ use gpui::{
     prelude::FluentBuilder, px, size,
 };
 use gpui_component::{ActiveTheme, Icon, IconName, StyledExt as _, tooltip::Tooltip, v_flex};
-use pulse_data::{UserOverrides, album_override_key, album_user_labels, artist_override_key, artist_user_labels};
+use pulse_data::{
+    UserOverrides, album_override_key, album_user_labels, artist_override_key, artist_user_labels,
+};
 use pulse_model::{Album, AlbumArtists, Artist, ArtistId, ArtworkId, Song, SongId, ThumbnailSize};
 
 use crate::artwork_prefetch;
@@ -125,10 +127,12 @@ pub fn page_back_label(cx: &gpui::App, page: PulsePage) -> SharedString {
     match page {
         PulsePage::Albums => "Albums".into(),
         PulsePage::Artists => "Artists".into(),
-        PulsePage::AlbumDetail(id) => resolve_album_display(cx, id)
-            .map_or_else(|| "Album".into(), |display| display.title),
-        PulsePage::ArtistDetail(id) => resolve_artist_display(cx, id)
-            .map_or_else(|| "Artist".into(), |display| display.name),
+        PulsePage::AlbumDetail(id) => {
+            resolve_album_display(cx, id).map_or_else(|| "Album".into(), |display| display.title)
+        }
+        PulsePage::ArtistDetail(id) => {
+            resolve_artist_display(cx, id).map_or_else(|| "Artist".into(), |display| display.name)
+        }
     }
 }
 
@@ -348,11 +352,7 @@ pub fn artist_detail_artwork_path(
         .and_then(|album| album_detail_artwork_path(store, album.artwork_id))
 }
 
-pub fn resolve_album_artwork(
-    cx: &gpui::App,
-    album: &Album,
-    artist_label: &str,
-) -> Option<PathBuf> {
+pub fn resolve_album_artwork(cx: &gpui::App, album: &Album, artist_label: &str) -> Option<PathBuf> {
     let override_key = album_override_key(&album.title, artist_label);
     let user_override = cx.global::<DataOverrides>().album(&override_key);
     let paths = cx.global::<DataPaths>();
@@ -402,10 +402,11 @@ pub fn aggregate_tag_counts<'a>(labels: impl IntoIterator<Item = &'a str>) -> Ve
         .collect();
 
     tag_counts.sort_by(|left, right| {
-        right
-            .count
-            .cmp(&left.count)
-            .then_with(|| left.label.to_ascii_lowercase().cmp(&right.label.to_ascii_lowercase()))
+        right.count.cmp(&left.count).then_with(|| {
+            left.label
+                .to_ascii_lowercase()
+                .cmp(&right.label.to_ascii_lowercase())
+        })
     });
 
     tag_counts
@@ -436,7 +437,11 @@ fn collect_artist_album_rows(
             tag_labels.extend(album.metadata.genres.iter().cloned());
             tag_labels.extend(album_user_labels(album_override));
 
-            for song in store.songs().values().filter(|song| song.album_id == Some(album.id)) {
+            for song in store
+                .songs()
+                .values()
+                .filter(|song| song.album_id == Some(album.id))
+            {
                 tag_labels.extend(song.metadata.genres.iter().cloned());
             }
 
@@ -489,8 +494,11 @@ fn collect_artist_other_songs(
         .map(|song| {
             tag_labels.extend(song.metadata.genres.iter().cloned());
 
-            let album = song.album_id.and_then(|album_id| store.albums().get(&album_id));
-            let album_name = album.map_or_else(|| "Unknown Album".into(), |entry| entry.title.clone());
+            let album = song
+                .album_id
+                .and_then(|album_id| store.albums().get(&album_id));
+            let album_name =
+                album.map_or_else(|| "Unknown Album".into(), |entry| entry.title.clone());
             let song_artwork = album.and_then(|entry| {
                 let artist_label = format_album_artists(artists, &entry.album_artists);
                 resolve_album_artwork(cx, entry, &artist_label)
@@ -526,7 +534,9 @@ pub fn resolve_artist_display(cx: &gpui::App, artist_id: ArtistId) -> Option<Art
         .and_then(|entry| entry.artwork.as_deref())
         .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)))
         .or_else(|| artist_detail_artwork_path(store, artist_id));
-    let has_custom_logo = user_override.and_then(|entry| entry.artwork.as_ref()).is_some();
+    let has_custom_logo = user_override
+        .and_then(|entry| entry.artwork.as_ref())
+        .is_some();
 
     let mut tag_labels: Vec<String> = artist_user_labels(user_override);
     let album_rows =
@@ -634,8 +644,8 @@ pub fn collect_artist_items(cx: &gpui::App) -> Vec<GridItem> {
             let thumbnail = custom_artwork
                 .clone()
                 .or_else(|| artist_thumbnail_path(store, artist_id));
-            let detail_artwork = custom_artwork
-                .or_else(|| artist_detail_artwork_path(store, artist_id));
+            let detail_artwork =
+                custom_artwork.or_else(|| artist_detail_artwork_path(store, artist_id));
 
             Some(GridItem {
                 album_id: None,
@@ -649,6 +659,7 @@ pub fn collect_artist_items(cx: &gpui::App) -> Vec<GridItem> {
         .collect()
 }
 
+#[must_use]
 pub fn format_duration_ms(duration_ms: u32) -> String {
     let total_seconds = duration_ms / 1000;
     let minutes = total_seconds / 60;
@@ -785,9 +796,9 @@ pub fn resolve_album_display(
 
     let user_tags = album_user_labels(user_override);
 
-    let total_duration_ms = songs
-        .iter()
-        .fold(0_u64, |total, song| total.saturating_add(u64::from(song.duration_ms)));
+    let total_duration_ms = songs.iter().fold(0_u64, |total, song| {
+        total.saturating_add(u64::from(song.duration_ms))
+    });
 
     let tracks = songs
         .into_iter()
@@ -1045,11 +1056,7 @@ mod layout_tests {
 
     #[test]
     fn filters_tag_suggestions_by_query() {
-        let suggestions = vec![
-            "Rock".into(),
-            "Synthwave".into(),
-            "Post-Rock".into(),
-        ];
+        let suggestions = vec!["Rock".into(), "Synthwave".into(), "Post-Rock".into()];
 
         assert_eq!(
             filter_tag_suggestions(&suggestions, "rock"),

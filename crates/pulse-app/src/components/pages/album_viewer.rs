@@ -19,20 +19,66 @@ use pulse_model::AlbumId;
 
 use crate::components::pulse::Pulse;
 use crate::data::save_album_user_labels;
+use crate::player::PulsePlayer;
 
 use super::common::{
-    AlbumDisplay, CatalogFingerprint, TrackRow, album_label_is_taken, catalog_fingerprint,
-    collect_suggested_labels, empty_state, filter_tag_suggestions, format_album_duration_ms,
-    overrides_generation, page_back_label, resolve_album_display, AlbumArtistEntry,
+    AlbumArtistEntry, AlbumDisplay, CatalogFingerprint, TrackRow, album_label_is_taken,
+    catalog_fingerprint, collect_suggested_labels, empty_state, filter_tag_suggestions,
+    format_album_duration_ms, overrides_generation, page_back_label, resolve_album_display,
 };
 
-const DETAIL_PANEL_WIDTH: f32 = 360.;
-const DETAIL_ARTWORK_SIZE: f32 = 320.;
+const SIDEBAR_WIDTH: f32 = 255.;
+const DETAIL_PANEL_MAX_WIDTH: f32 = 360.;
+const DETAIL_PANEL_MIN_WIDTH: f32 = 260.;
+const DETAIL_STACK_BREAKPOINT: f32 = 820.;
+const MIN_TRACK_LIST_WIDTH: f32 = 320.;
+const DETAIL_ARTWORK_MAX: f32 = 320.;
+const DETAIL_ARTWORK_COMPACT: f32 = 128.;
+const DETAIL_ARTWORK_MIN: f32 = 160.;
 const TRACK_ROW_HEIGHT: f32 = 40.;
 const DISC_HEADER_HEIGHT: f32 = 34.;
 const DISC_SECTION_GAP: f32 = 16.;
 const TAG_MENU_MAX_HEIGHT: f32 = 16.;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AlbumDetailLayoutMode {
+    Sidebar,
+    Stacked,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct AlbumDetailLayout {
+    mode: AlbumDetailLayoutMode,
+    panel_width: f32,
+    artwork_size: f32,
+}
+
+impl AlbumDetailLayout {
+    fn for_window(window: &Window) -> Self {
+        let content_width = (window.viewport_size().width.as_f32() - SIDEBAR_WIDTH).max(0.);
+
+        if content_width < DETAIL_STACK_BREAKPOINT {
+            let artwork_size = DETAIL_ARTWORK_COMPACT;
+            return Self {
+                mode: AlbumDetailLayoutMode::Stacked,
+                panel_width: content_width,
+                artwork_size,
+            };
+        }
+
+        let panel_width = DETAIL_PANEL_MAX_WIDTH
+            .min((content_width - MIN_TRACK_LIST_WIDTH).max(DETAIL_PANEL_MIN_WIDTH));
+        let artwork_size = DETAIL_ARTWORK_MAX
+            .min(panel_width - 48.)
+            .max(DETAIL_ARTWORK_MIN);
+
+        Self {
+            mode: AlbumDetailLayoutMode::Sidebar,
+            panel_width,
+            artwork_size,
+        }
+    }
+}
 #[derive(Clone, Debug)]
 enum AlbumTrackListRowKind {
     DiscHeader { label: SharedString },
@@ -276,7 +322,12 @@ impl AlbumViewerPage {
                 disc_header_row(label, cx).into_any_element()
             }
             AlbumTrackListRowKind::Track { track, stripe } => {
-                track_row(track, *stripe, cx).into_any_element()
+                let song_ids: Vec<_> = self
+                    .display
+                    .as_ref()
+                    .map(|display| display.tracks.iter().map(|row| row.id).collect())
+                    .unwrap_or_default();
+                track_row(track, *stripe, &song_ids, cx).into_any_element()
             }
             AlbumTrackListRowKind::DiscSpacer => div().h(px(DISC_SECTION_GAP)).into_any_element(),
         }
@@ -304,43 +355,56 @@ impl Render for AlbumViewerPage {
         self.tag_suggestions.clone_from(&tag_suggestions);
         let tag_menu_open = self.tag_menu_open;
         let tag_input_bounds = self.tag_input_bounds;
+        let layout = AlbumDetailLayout::for_window(window);
+
+        let track_list = div().flex_1().min_w_0().min_h_0().px_6().pb_6().child(
+            v_virtual_list(
+                entity.clone(),
+                "album-track-list",
+                item_sizes,
+                |this, visible_range, _, cx| {
+                    visible_range
+                        .map(|row_ix| this.render_track_list_row(row_ix, cx))
+                        .collect()
+                },
+            )
+            .track_scroll(&self.track_scroll_handle),
+        );
+
+        let detail_panel = album_detail_panel(
+            &entity,
+            &self.pulse,
+            &display,
+            &tag_input,
+            &tag_suggestions,
+            tag_menu_open,
+            tag_input_bounds,
+            layout,
+            cx,
+        );
 
         div()
             .size_full()
             .flex()
             .flex_col()
             .child(h_flex_back_button(pulse, cx))
-            .child(
-                div()
+            .child(match layout.mode {
+                AlbumDetailLayoutMode::Sidebar => div()
                     .flex_1()
                     .min_h_0()
                     .flex()
-                    .child(
-                        div().flex_1().min_w_0().min_h_0().px_6().pb_6().child(
-                            v_virtual_list(
-                                entity.clone(),
-                                "album-track-list",
-                                item_sizes,
-                                |this, visible_range, _, cx| {
-                                    visible_range
-                                        .map(|row_ix| this.render_track_list_row(row_ix, cx))
-                                        .collect()
-                                },
-                            )
-                            .track_scroll(&self.track_scroll_handle),
-                        ),
-                    )
-                    .child(album_tags_panel(
-                        &entity,
-                        &self.pulse,
-                        &display,
-                        &tag_input,
-                        &tag_suggestions,
-                        tag_menu_open,
-                        tag_input_bounds,
-                        cx,
-                    )),
-            )
+                    .child(track_list)
+                    .child(detail_panel)
+                    .into_any_element(),
+                AlbumDetailLayoutMode::Stacked => div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .child(detail_panel)
+                    .child(track_list)
+                    .into_any_element(),
+            })
             .into_any_element()
     }
 }
@@ -382,7 +446,7 @@ fn album_stats_line(display: &AlbumDisplay) -> Option<String> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn album_tags_panel(
+fn album_detail_panel(
     view: &Entity<AlbumViewerPage>,
     pulse: &Entity<Pulse>,
     display: &AlbumDisplay,
@@ -390,69 +454,146 @@ fn album_tags_panel(
     tag_suggestions: &[String],
     tag_menu_open: bool,
     tag_input_bounds: Bounds<Pixels>,
+    layout: AlbumDetailLayout,
+    cx: &gpui::App,
+) -> impl IntoElement {
+    let theme = cx.theme();
+    let tags = album_tags_editor(
+        view,
+        display,
+        tag_input,
+        tag_suggestions,
+        tag_menu_open,
+        tag_input_bounds,
+        cx,
+    );
+
+    match layout.mode {
+        AlbumDetailLayoutMode::Sidebar => v_flex()
+            .id(("album-detail-panel", display.album_id.0))
+            .w(px(layout.panel_width))
+            .flex_shrink_0()
+            .min_h_0()
+            .h_full()
+            .gap_4()
+            .px_6()
+            .py_6()
+            .overflow_y_scroll()
+            .border_l_1()
+            .border_color(theme.border)
+            .bg(theme.muted.opacity(0.35))
+            .child(album_artwork_frame(
+                display,
+                layout.artwork_size,
+                layout.mode,
+                cx,
+            ))
+            .child(album_detail_metadata(
+                pulse,
+                display,
+                AlbumDetailLayoutMode::Sidebar,
+                cx,
+            ))
+            .child(tags)
+            .into_any_element(),
+        AlbumDetailLayoutMode::Stacked => v_flex()
+            .id(("album-detail-panel", display.album_id.0))
+            .w_full()
+            .flex_shrink_0()
+            .gap_4()
+            .px_6()
+            .py_4()
+            .border_b_1()
+            .border_color(theme.border)
+            .bg(theme.muted.opacity(0.35))
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_4()
+                    .items_start()
+                    .child(album_artwork_frame(
+                        display,
+                        layout.artwork_size,
+                        layout.mode,
+                        cx,
+                    ))
+                    .child(album_detail_metadata(
+                        pulse,
+                        display,
+                        AlbumDetailLayoutMode::Stacked,
+                        cx,
+                    )),
+            )
+            .child(tags)
+            .into_any_element(),
+    }
+}
+
+fn album_artwork_frame(
+    display: &AlbumDisplay,
+    artwork_size: f32,
+    layout: AlbumDetailLayoutMode,
     cx: &gpui::App,
 ) -> impl IntoElement {
     let theme = cx.theme();
 
-    v_flex()
-        .id(("album-detail-panel", display.album_id.0))
-        .w(px(DETAIL_PANEL_WIDTH))
-        .flex_shrink_0()
-        .h_full()
-        .gap_4()
-        .px_6()
-        .py_6()
-        .border_l_1()
+    let artwork = div()
+        .w(px(artwork_size))
+        .h(px(artwork_size))
+        .rounded(theme.radius)
+        .overflow_hidden()
+        .bg(theme.muted)
+        .border_1()
         .border_color(theme.border)
-        .bg(theme.muted.opacity(0.35))
-        .child(album_artwork_frame(display, cx))
-        .child(album_detail_metadata(pulse, display, cx))
-        .child(album_tags_editor(
-            view,
-            display,
-            tag_input,
-            tag_suggestions,
-            tag_menu_open,
-            tag_input_bounds,
-            cx,
-        ))
-}
+        .child(artwork_content(display.artwork.as_deref(), cx));
 
-fn album_artwork_frame(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoElement {
-    let theme = cx.theme();
-
-    div().w_full().flex().justify_center().child(
-        div()
-            .w(px(DETAIL_ARTWORK_SIZE))
-            .h(px(DETAIL_ARTWORK_SIZE))
-            .rounded(theme.radius)
-            .overflow_hidden()
-            .bg(theme.muted)
-            .border_1()
-            .border_color(theme.border)
-            .child(artwork_content(display.artwork.as_deref(), cx)),
-    )
+    match layout {
+        AlbumDetailLayoutMode::Sidebar => div()
+            .w_full()
+            .flex()
+            .justify_center()
+            .flex_shrink_0()
+            .child(artwork)
+            .into_any_element(),
+        AlbumDetailLayoutMode::Stacked => artwork.flex_shrink_0().into_any_element(),
+    }
 }
 
 fn album_detail_metadata(
     pulse: &Entity<Pulse>,
     display: &AlbumDisplay,
+    layout: AlbumDetailLayoutMode,
     cx: &gpui::App,
 ) -> impl IntoElement {
     let theme = cx.theme();
 
-    v_flex()
-        .gap_1()
-        .child(div().text_xl().font_semibold().child(display.title.clone()))
-        .when_some(album_stats_line(display), |this, line| {
-            this.child(
-                div()
-                    .text_sm()
-                    .text_color(theme.muted_foreground)
-                    .child(line),
-            )
-        })
-        .child(album_artist_line(pulse, display, cx))
+    let title = match layout {
+        AlbumDetailLayoutMode::Sidebar => div().text_xl(),
+        AlbumDetailLayoutMode::Stacked => div().text_lg(),
+    };
+
+    match layout {
+        AlbumDetailLayoutMode::Sidebar => v_flex().min_w_0().flex_shrink_0().gap_1(),
+        AlbumDetailLayoutMode::Stacked => v_flex().min_w_0().flex_1().gap_1(),
+    }
+    .child(
+        title
+            .font_semibold()
+            .overflow_hidden()
+            .text_ellipsis()
+            .child(display.title.clone()),
+    )
+    .when_some(album_stats_line(display), |this, line| {
+        this.child(
+            div()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .overflow_hidden()
+                .text_ellipsis()
+                .child(line),
+        )
+    })
+    .child(album_artist_line(pulse, display, cx))
 }
 
 fn album_artist_line(
@@ -471,6 +612,7 @@ fn album_artist_line(
     }
 
     h_flex()
+        .min_w_0()
         .flex_wrap()
         .items_center()
         .gap_2()
@@ -816,8 +958,16 @@ fn disc_header_row(label: &SharedString, cx: &gpui::App) -> impl IntoElement {
         .child(label.clone())
 }
 
-fn track_row(track: &TrackRow, stripe: bool, cx: &gpui::App) -> impl IntoElement {
+fn track_row(
+    track: &TrackRow,
+    stripe: bool,
+    queue: &[pulse_model::SongId],
+    cx: &gpui::App,
+) -> impl IntoElement {
     let theme = cx.theme();
+    let is_current = PulsePlayer::current_song_id(cx) == Some(track.id);
+    let index = queue.iter().position(|id| *id == track.id).unwrap_or(0);
+    let queue = queue.to_vec();
 
     h_flex()
         .id(("album-track", track.id.0))
@@ -826,7 +976,10 @@ fn track_row(track: &TrackRow, stripe: bool, cx: &gpui::App) -> impl IntoElement
         .items_center()
         .gap_3()
         .px_4()
-        .when(stripe, |this| this.bg(theme.list_even))
+        .cursor_pointer()
+        .when(is_current, |this| this.bg(theme.primary.opacity(0.15)))
+        .when(!is_current && stripe, |this| this.bg(theme.list_even))
+        .on_click(move |_, _, cx| PulsePlayer::play_songs(cx, &queue, index))
         .child(
             div()
                 .w(px(32.))
