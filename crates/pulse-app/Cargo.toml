@@ -13,6 +13,8 @@ anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true
+dirs = "6"
+rfd = { version = "0.15", default-features = true }
 
 tracing-subscriber = "0.3"
 

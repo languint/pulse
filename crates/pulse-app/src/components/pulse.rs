@@ -2,11 +2,11 @@ use gpui::{
     AppContext, Entity, FocusHandle, InteractiveElement, MouseMoveEvent, ParentElement, Render,
     Styled, Window, div,
 };
-use gpui_component::{ActiveTheme, TITLE_BAR_HEIGHT};
+use gpui_component::{ActiveTheme, Root, TITLE_BAR_HEIGHT};
 
 use crate::{
-    actions::ToggleFullscreen,
-    components::{sidebar::Sidebar, toolbar::Toolbar},
+    actions::{ManageLibraryRoots, ToggleFullscreen},
+    components::{library_roots_dialog::open_library_roots_dialog, sidebar::Sidebar, toolbar::Toolbar},
 };
 
 pub struct Pulse {
@@ -28,18 +28,22 @@ impl Pulse {
 impl Render for Pulse {
     fn render(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut gpui::prelude::Context<Self>,
     ) -> impl gpui::prelude::IntoElement {
         let theme = cx.theme();
+        let background = theme.background;
+        let foreground = theme.foreground;
+        let font_size = theme.font_size;
+        let dialog_layer = Root::render_dialog_layer(window, cx);
 
         let mut root = div()
             .size_full()
             .flex()
             .flex_col()
-            .bg(theme.background)
-            .text_color(theme.foreground)
-            .text_size(theme.font_size)
+            .bg(background)
+            .text_color(foreground)
+            .text_size(font_size)
             .child(self.toolbar.clone())
             .child(
                 div()
@@ -51,8 +55,12 @@ impl Render for Pulse {
                     .on_action(cx.listener(|_, _: &ToggleFullscreen, window, _| {
                         window.toggle_fullscreen();
                     }))
+                    .on_action(cx.listener(|_, _: &ManageLibraryRoots, window, cx| {
+                        open_library_roots_dialog(window, cx);
+                    }))
                     .child(self.sidebar.clone()),
-            );
+            )
+            .children(dialog_layer);
 
         // This is needed for now since there is a bug in gpui
         #[cfg(target_os = "windows")]

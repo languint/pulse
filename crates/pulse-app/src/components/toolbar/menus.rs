@@ -1,7 +1,7 @@
 use gpui::{App, Entity, Menu, MenuItem, SharedString};
 use gpui_component::{GlobalState, menu::AppMenuBar};
 
-use crate::actions::{Quit, ToggleFullscreen};
+use crate::actions::{ManageLibraryRoots, Quit, ToggleFullscreen};
 
 pub fn init(cx: &mut App) -> Entity<AppMenuBar> {
     let app_menu_bar = AppMenuBar::new(cx);
@@ -31,6 +31,11 @@ fn build_menus() -> Vec<Menu> {
                 MenuItem::separator(),
                 MenuItem::action("Quit", Quit),
             ],
+            disabled: false,
+        },
+        Menu {
+            name: SharedString::from("Library"),
+            items: vec![MenuItem::action("Manage Roots...", ManageLibraryRoots)],
             disabled: false,
         },
         Menu {

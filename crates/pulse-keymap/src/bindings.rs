@@ -2,7 +2,7 @@ use gpui::{Action, App, KeyBinding};
 
 use crate::{KeymapAction, PulseKeymap};
 
-pub fn bind_keystrokes<A: Action + Clone>(cx: &mut App, keystrokes: &[String], action: A) {
+pub fn bind_keystrokes<A: Action + Clone>(cx: &mut App, keystrokes: &[String], action: &A) {
     if keystrokes.is_empty() {
         return;
     }
@@ -15,7 +15,7 @@ pub fn bind_keystrokes<A: Action + Clone>(cx: &mut App, keystrokes: &[String], a
 }
 
 impl PulseKeymap {
-    pub fn bind_action<A: Action + Clone>(&self, cx: &mut App, id: KeymapAction, action: A) {
+    pub fn bind_action<A: Action + Clone>(&self, cx: &mut App, id: KeymapAction, action: &A) {
         bind_keystrokes(cx, self.keystrokes_for(id), action);
     }
 }

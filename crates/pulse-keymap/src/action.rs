@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum KeymapAction {
     ToggleFullscreen,
     Quit,
+    ManageLibraryRoots,
 }
 
 impl KeymapAction {
@@ -13,6 +14,7 @@ impl KeymapAction {
         match self {
             Self::ToggleFullscreen => "toggle_fullscreen",
             Self::Quit => "quit",
+            Self::ManageLibraryRoots => "manage_library_roots",
         }
     }
 }

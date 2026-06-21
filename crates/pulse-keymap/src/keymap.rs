@@ -19,7 +19,7 @@ impl Default for PulseKeymap {
 
 impl PulseKeymap {
     #[must_use]
-    pub fn bindings(&self) -> &HashMap<KeymapAction, Vec<String>> {
+    pub const fn bindings(&self) -> &HashMap<KeymapAction, Vec<String>> {
         &self.bindings
     }
 
@@ -52,6 +52,10 @@ fn default_bindings() -> HashMap<KeymapAction, Vec<String>> {
             vec!["f11".into(), "ctrl-f".into()],
         ),
         (KeymapAction::Quit, default_quit_keystrokes()),
+        (
+            KeymapAction::ManageLibraryRoots,
+            vec!["ctrl-shift-l".into()],
+        ),
     ])
 }
 

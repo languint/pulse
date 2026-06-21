@@ -5,13 +5,15 @@ pub mod actions;
 pub mod components;
 pub mod config;
 pub mod error;
+pub mod library;
 pub mod pulse;
 
-use actions::{Quit, ToggleFullscreen};
-use components::pulse::Pulse;
+use actions::{ManageLibraryRoots, Quit, ToggleFullscreen};
+use components::{library_roots_dialog::open_library_roots_dialog, pulse::Pulse};
 use pulse_keymap::KeymapAction;
 
 use crate::config::PulseConfig;
+use crate::library::PulseLibrary;
 
 fn main() {
     tracing_subscriber::fmt::init();
@@ -26,9 +28,22 @@ fn main() {
             let config = PulseConfig::default();
             config
                 .keymap
-                .bind_action(cx, KeymapAction::ToggleFullscreen, ToggleFullscreen);
-            config.keymap.bind_action(cx, KeymapAction::Quit, Quit);
-            PulseConfig::set_global(cx, config);
+                .bind_action(cx, KeymapAction::ToggleFullscreen, &ToggleFullscreen);
+            config
+                .keymap
+                .bind_action(cx, KeymapAction::ManageLibraryRoots, &ManageLibraryRoots);
+            config.keymap.bind_action(cx, KeymapAction::Quit, &Quit);
+            PulseConfig::set_global(cx, config.clone());
+
+            PulseLibrary::init(cx, config.library);
+
+            cx.on_action(|_: &ManageLibraryRoots, cx| {
+                if let Some(window) = cx.active_window() {
+                    let _ = window.update(cx, |_, window, cx| {
+                        open_library_roots_dialog(window, cx);
+                    });
+                }
+            });
 
             cx.on_action(|_: &Quit, cx| {
                 cx.quit();
