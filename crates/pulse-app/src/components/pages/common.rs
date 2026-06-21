@@ -9,7 +9,7 @@ use gpui::{
     px, size,
 };
 use gpui_component::{ActiveTheme, Icon, IconName, StyledExt as _, tooltip::Tooltip, v_flex};
-use pulse_data::{UserOverrides, album_override_key, artist_override_key};
+use pulse_data::{UserOverrides, album_override_key, album_user_labels, artist_override_key};
 use pulse_model::{Album, AlbumArtists, Artist, ArtistId, ArtworkId, Song, SongId, ThumbnailSize};
 
 use crate::artwork_prefetch;
@@ -127,12 +127,14 @@ pub fn grid_item_sizes(layout: GridLayout, item_count: usize) -> Rc<Vec<Size<Pix
 #[derive(Clone, Debug)]
 pub struct AlbumDisplay {
     pub album_id: pulse_model::AlbumId,
+    pub override_key: String,
     pub title: SharedString,
     pub artists: SharedString,
     pub year: Option<u16>,
     pub duration_ms: u64,
     pub artwork: Option<PathBuf>,
-    pub genres: Vec<String>,
+    pub library_genres: Vec<String>,
+    pub user_tags: Vec<String>,
     pub tracks: Vec<TrackRow>,
 }
 
@@ -365,6 +367,73 @@ pub fn format_album_duration_ms(total_ms: u64) -> String {
     }
 }
 
+#[must_use]
+pub fn album_label_is_taken(display: &AlbumDisplay, label: &str) -> bool {
+    let label = label.trim();
+    if label.is_empty() {
+        return true;
+    }
+
+    display
+        .library_genres
+        .iter()
+        .chain(display.user_tags.iter())
+        .any(|existing| existing.eq_ignore_ascii_case(label))
+}
+
+#[must_use]
+pub fn collect_suggested_labels(cx: &gpui::App, display: &AlbumDisplay) -> Vec<String> {
+    use std::collections::BTreeSet;
+
+    let mut seen = BTreeSet::new();
+    let mut labels = Vec::new();
+
+    let mut consider = |label: &str| {
+        let trimmed = label.trim();
+        if trimmed.is_empty() || album_label_is_taken(display, trimmed) {
+            return;
+        }
+
+        let key = trimmed.to_ascii_lowercase();
+        if seen.insert(key) {
+            labels.push(trimmed.to_string());
+        }
+    };
+
+    let store = cx.global::<PulseLibrary>().inner().store();
+    for album in store.albums().values() {
+        for genre in &album.metadata.genres {
+            consider(genre);
+        }
+    }
+    for song in store.songs().values() {
+        for genre in &song.metadata.genres {
+            consider(genre);
+        }
+    }
+    for label in cx.global::<DataOverrides>().all_user_labels() {
+        consider(&label);
+    }
+
+    labels.sort_by_key(|label| label.to_ascii_lowercase());
+    labels
+}
+
+#[must_use]
+pub fn filter_tag_suggestions(suggestions: &[String], query: &str) -> Vec<String> {
+    let query = query.trim();
+    if query.is_empty() {
+        return suggestions.to_vec();
+    }
+
+    let query_lower = query.to_ascii_lowercase();
+    suggestions
+        .iter()
+        .filter(|label| label.to_ascii_lowercase().contains(&query_lower))
+        .cloned()
+        .collect()
+}
+
 pub fn resolve_album_display(
     cx: &gpui::App,
     album_id: pulse_model::AlbumId,
@@ -397,12 +466,14 @@ pub fn resolve_album_display(
         .collect();
     songs.sort_by(|left, right| compare_album_songs(left, right));
 
-    let mut genres: BTreeSet<String> = album.metadata.genres.iter().cloned().collect();
+    let mut library_genres: BTreeSet<String> = album.metadata.genres.iter().cloned().collect();
     for song in &songs {
         for genre in &song.metadata.genres {
-            genres.insert(genre.clone());
+            library_genres.insert(genre.clone());
         }
     }
+
+    let user_tags = album_user_labels(user_override);
 
     let total_duration_ms = songs
         .iter()
@@ -415,12 +486,14 @@ pub fn resolve_album_display(
 
     Some(AlbumDisplay {
         album_id,
+        override_key,
         title: title.to_string().into(),
         artists: artist_label.into(),
         year: album.year,
         duration_ms: total_duration_ms,
         artwork,
-        genres: genres.into_iter().collect(),
+        library_genres: library_genres.into_iter().collect(),
+        user_tags,
         tracks,
     })
 }
@@ -603,6 +676,21 @@ mod layout_tests {
         layout
             .cell_width
             .mul_add(usize_to_f32(layout.columns), GRID_GAP.mul_add(gaps, 0.))
+    }
+
+    #[test]
+    fn filters_tag_suggestions_by_query() {
+        let suggestions = vec![
+            "Rock".into(),
+            "Synthwave".into(),
+            "Post-Rock".into(),
+        ];
+
+        assert_eq!(
+            filter_tag_suggestions(&suggestions, "rock"),
+            vec!["Rock".to_string(), "Post-Rock".to_string()]
+        );
+        assert_eq!(filter_tag_suggestions(&suggestions, ""), suggestions);
     }
 
     #[test]

@@ -1,14 +1,16 @@
-use gpui::{Context, Entity, ParentElement, Render, Window};
+use gpui::{Context, Entity, ParentElement, Render, Styled, Window, div, px};
 use gpui_component::{
+    h_flex,
     IconName,
     sidebar::{
         Sidebar as SidebarPanel, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuItem,
     },
+    StyledExt as _,
 };
 
 use crate::components::{
     navigation::PulsePage,
-    pulse::Pulse,
+    pulse::{Pulse, icon::pulse_logo},
 };
 
 pub struct AppSidebar {
@@ -28,7 +30,15 @@ impl Render for AppSidebar {
         let pulse = self.pulse.clone();
 
         SidebarPanel::new("pulse-sidebar")
-            .header(SidebarHeader::new().child("Pulse"))
+            .header(
+                SidebarHeader::new().child(
+                    h_flex()
+                        .items_center()
+                        .gap_2()
+                        .child(pulse_logo(px(24.), cx))
+                        .child(div().font_semibold().child("Pulse")),
+                ),
+            )
             .child(
                 SidebarGroup::new("Library").child(
                     SidebarMenu::new()

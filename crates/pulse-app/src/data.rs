@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use gpui::Global;
+use gpui::{App, Global, UpdateGlobal};
 use pulse_data::{PulsePaths, UserOverrides};
 
 /// Application-global handle to [`PulsePaths`].
@@ -60,4 +60,31 @@ pub fn persist_keymap(
     keymap: &pulse_keymap::PulseKeymap,
 ) -> Result<(), pulse_data::DataError> {
     pulse_data::KeymapFile::from_keymap(keymap).save(paths)
+}
+
+/// Writes user metadata overrides to disk.
+///
+/// # Errors
+///
+/// Returns [`pulse_data::DataError`] when the overrides file cannot be written.
+pub fn persist_overrides(
+    paths: &PulsePaths,
+    overrides: &UserOverrides,
+) -> Result<(), pulse_data::DataError> {
+    overrides.save(paths)
+}
+
+/// Updates and persists user-added labels for an album.
+pub fn save_album_user_labels(cx: &mut App, override_key: &str, labels: &[String]) {
+    let paths = cx.global::<DataPaths>().clone();
+
+    DataOverrides::update_global(cx, |data, _| {
+        data.0.set_album_user_labels(override_key.to_string(), labels);
+
+        if let Err(error) = persist_overrides(&paths, &data.0) {
+            tracing::error!(%error, "failed to save metadata overrides");
+        }
+    });
+
+    cx.refresh_windows();
 }

@@ -17,6 +17,8 @@ use crate::{
 
 use pulse_model::AlbumId;
 
+pub mod icon;
+
 pub struct Pulse {
     pub focus_handle: FocusHandle,
     page: PulsePage,
@@ -38,7 +40,7 @@ impl Pulse {
             sidebar: cx.new(|_| AppSidebar::new(pulse.clone())),
             albums_page: cx.new(|cx| AlbumsPage::new(pulse.clone(), cx)),
             artists_page: cx.new(ArtistsPage::new),
-            album_viewer_page: cx.new(|_| AlbumViewerPage::new(pulse.clone())),
+            album_viewer_page: cx.new(|cx| AlbumViewerPage::new(pulse.clone(), cx)),
         }
     }
 

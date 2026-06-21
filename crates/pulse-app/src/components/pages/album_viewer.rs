@@ -2,21 +2,28 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, Context, Entity, InteractiveElement, IntoElement, ObjectFit, ParentElement, Pixels,
-    Render, SharedString, Size, Styled, StyledImage, Window, div, img, prelude::FluentBuilder, px,
+    AnyElement, AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement, ObjectFit,
+    ParentElement, Pixels, Render, SharedString, Size, StatefulInteractiveElement, Styled,
+    StyledImage, Window, anchored, deferred, div, hash, img, prelude::FluentBuilder, px, rems,
     size,
 };
 use gpui_component::{
-    ActiveTheme, Icon, IconName, Sizable, StyledExt as _, VirtualListScrollHandle, button::Button,
-    h_flex, tag::Tag, v_flex, v_virtual_list,
+    ActiveTheme, ElementExt, Icon, IconName, Sizable, StyledExt as _, VirtualListScrollHandle,
+    button::{Button, ButtonVariants as _},
+    h_flex,
+    input::{Input, InputEvent, InputState},
+    tag::Tag,
+    v_flex, v_virtual_list,
 };
 use pulse_model::AlbumId;
 
 use crate::components::pulse::Pulse;
+use crate::data::save_album_user_labels;
 
 use super::common::{
-    AlbumDisplay, CatalogFingerprint, TrackRow, catalog_fingerprint, empty_state,
-    format_album_duration_ms, resolve_album_display,
+    AlbumDisplay, CatalogFingerprint, TrackRow, album_label_is_taken, catalog_fingerprint,
+    collect_suggested_labels, empty_state, filter_tag_suggestions, format_album_duration_ms,
+    resolve_album_display,
 };
 
 const DETAIL_PANEL_WIDTH: f32 = 360.;
@@ -24,6 +31,7 @@ const DETAIL_ARTWORK_SIZE: f32 = 320.;
 const TRACK_ROW_HEIGHT: f32 = 40.;
 const DISC_HEADER_HEIGHT: f32 = 34.;
 const DISC_SECTION_GAP: f32 = 16.;
+const TAG_MENU_MAX_HEIGHT: f32 = 16.;
 
 #[derive(Clone, Debug)]
 enum AlbumTrackListRowKind {
@@ -69,6 +77,10 @@ impl AlbumTrackListRow {
 pub struct AlbumViewerPage {
     pulse: Entity<Pulse>,
     track_scroll_handle: VirtualListScrollHandle,
+    tag_input: Option<Entity<InputState>>,
+    tag_menu_open: bool,
+    tag_input_bounds: Bounds<Pixels>,
+    tag_suggestions: Vec<String>,
     cached_album_id: Option<AlbumId>,
     catalog_fp: CatalogFingerprint,
     display: Option<AlbumDisplay>,
@@ -78,16 +90,149 @@ pub struct AlbumViewerPage {
 
 impl AlbumViewerPage {
     #[must_use]
-    pub fn new(pulse: Entity<Pulse>) -> Self {
+    pub fn new(pulse: Entity<Pulse>, _: &mut Context<Self>) -> Self {
         Self {
             pulse,
             track_scroll_handle: VirtualListScrollHandle::new(),
+            tag_input: None,
+            tag_menu_open: false,
+            tag_input_bounds: Bounds::default(),
+            tag_suggestions: Vec::new(),
             cached_album_id: None,
             catalog_fp: CatalogFingerprint::default(),
             display: None,
             list_rows: Rc::from([]),
             item_sizes: Rc::new(Vec::new()),
         }
+    }
+
+    fn ensure_tag_input(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<InputState> {
+        if let Some(input) = self.tag_input.clone() {
+            return input;
+        }
+
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Search or add tag..."));
+
+        cx.subscribe_in(&input, window, |this, _, event, window, cx| match event {
+            InputEvent::Change | InputEvent::Focus => {
+                this.open_tag_menu(cx);
+            }
+            InputEvent::PressEnter {
+                secondary: false,
+                shift: false,
+            } => {
+                this.commit_new_tag(window, cx);
+            }
+            InputEvent::PressEnter { .. } | InputEvent::Blur => {}
+        })
+        .detach();
+
+        self.tag_input = Some(input.clone());
+        input
+    }
+
+    const fn invalidate_album_cache(&mut self) {
+        self.cached_album_id = None;
+    }
+
+    fn pick_tag_suggestion(&mut self, label: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_user_label(label, cx);
+        self.clear_tag_input(window, cx);
+    }
+
+    fn clear_tag_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(tag_input) = self.tag_input.clone() {
+            tag_input.update(cx, |input, cx| {
+                input.set_value("", window, cx);
+            });
+        }
+        self.tag_menu_open = false;
+        cx.notify();
+    }
+
+    fn open_tag_menu(&mut self, cx: &mut Context<Self>) {
+        if self.tag_menu_open {
+            return;
+        }
+
+        self.tag_menu_open = true;
+        cx.notify();
+    }
+
+    fn toggle_tag_menu(&mut self, cx: &mut Context<Self>) {
+        self.tag_menu_open = !self.tag_menu_open;
+        cx.notify();
+    }
+
+    fn close_tag_menu(&mut self, cx: &mut Context<Self>) {
+        if self.tag_menu_open {
+            self.tag_menu_open = false;
+            cx.notify();
+        }
+    }
+
+    fn add_user_label(&mut self, label: &str, cx: &mut Context<Self>) {
+        let label = label.trim();
+        if label.is_empty() {
+            return;
+        }
+
+        let Some(display) = self.display.clone() else {
+            return;
+        };
+
+        if album_label_is_taken(&display, label) {
+            return;
+        }
+
+        let mut user_tags = display.user_tags.clone();
+        user_tags.push(label.to_string());
+        save_album_user_labels(cx, &display.override_key, &user_tags);
+        self.invalidate_album_cache();
+        cx.notify();
+    }
+
+    fn commit_new_tag(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(tag_input) = self.tag_input.clone() else {
+            return;
+        };
+
+        let query = tag_input.read(cx).text().to_string();
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+
+        let label = self
+            .tag_suggestions
+            .iter()
+            .find(|existing| existing.eq_ignore_ascii_case(trimmed))
+            .cloned()
+            .unwrap_or_else(|| trimmed.to_string());
+
+        self.add_user_label(&label, cx);
+        self.clear_tag_input(window, cx);
+    }
+
+    fn remove_user_tag(&mut self, tag: &str, cx: &mut Context<Self>) {
+        let Some(display) = self.display.clone() else {
+            return;
+        };
+
+        let user_tags: Vec<String> = display
+            .user_tags
+            .iter()
+            .filter(|existing| !existing.eq_ignore_ascii_case(tag))
+            .cloned()
+            .collect();
+
+        save_album_user_labels(cx, &display.override_key, &user_tags);
+        self.invalidate_album_cache();
+        cx.notify();
     }
 
     fn ensure_album(&mut self, album_id: AlbumId, cx: &gpui::App) {
@@ -131,7 +276,7 @@ impl AlbumViewerPage {
 }
 
 impl Render for AlbumViewerPage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let page = self.pulse.read(cx).page();
         let Some(album_id) = page.album_detail() else {
             return empty_state("No album selected.", cx).into_any_element();
@@ -139,13 +284,18 @@ impl Render for AlbumViewerPage {
 
         self.ensure_album(album_id, cx);
 
-        let Some(display) = self.display.as_ref() else {
+        let Some(display) = self.display.clone() else {
             return empty_state("Album not found.", cx).into_any_element();
         };
 
         let pulse = self.pulse.clone();
         let item_sizes = self.item_sizes.clone();
         let entity = cx.entity();
+        let tag_input = self.ensure_tag_input(window, cx);
+        let tag_suggestions = collect_suggested_labels(cx, &display);
+        self.tag_suggestions.clone_from(&tag_suggestions);
+        let tag_menu_open = self.tag_menu_open;
+        let tag_input_bounds = self.tag_input_bounds;
 
         div()
             .size_full()
@@ -160,7 +310,7 @@ impl Render for AlbumViewerPage {
                     .child(
                         div().flex_1().min_w_0().min_h_0().px_6().pb_6().child(
                             v_virtual_list(
-                                entity,
+                                entity.clone(),
                                 "album-track-list",
                                 item_sizes,
                                 |this, visible_range, _, cx| {
@@ -172,7 +322,15 @@ impl Render for AlbumViewerPage {
                             .track_scroll(&self.track_scroll_handle),
                         ),
                     )
-                    .child(album_detail_panel(display, cx)),
+                    .child(album_tags_panel(
+                        &entity,
+                        &display,
+                        &tag_input,
+                        &tag_suggestions,
+                        tag_menu_open,
+                        tag_input_bounds,
+                        cx,
+                    )),
             )
             .into_any_element()
     }
@@ -211,7 +369,15 @@ fn album_stats_line(display: &AlbumDisplay) -> Option<String> {
     }
 }
 
-fn album_detail_panel(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoElement {
+fn album_tags_panel(
+    view: &Entity<AlbumViewerPage>,
+    display: &AlbumDisplay,
+    tag_input: &Entity<InputState>,
+    tag_suggestions: &[String],
+    tag_menu_open: bool,
+    tag_input_bounds: Bounds<Pixels>,
+    cx: &gpui::App,
+) -> impl IntoElement {
     let theme = cx.theme();
 
     v_flex()
@@ -225,62 +391,287 @@ fn album_detail_panel(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoElemen
         .border_l_1()
         .border_color(theme.border)
         .bg(theme.muted.opacity(0.35))
-        .child(
-            div().w_full().flex().justify_center().child(
+        .child(album_artwork_frame(display, cx))
+        .child(album_detail_metadata(display, cx))
+        .child(album_tags_editor(
+            view,
+            display,
+            tag_input,
+            tag_suggestions,
+            tag_menu_open,
+            tag_input_bounds,
+            cx,
+        ))
+}
+
+fn album_artwork_frame(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoElement {
+    let theme = cx.theme();
+
+    div().w_full().flex().justify_center().child(
+        div()
+            .w(px(DETAIL_ARTWORK_SIZE))
+            .h(px(DETAIL_ARTWORK_SIZE))
+            .rounded(theme.radius)
+            .overflow_hidden()
+            .bg(theme.muted)
+            .border_1()
+            .border_color(theme.border)
+            .child(artwork_content(display.artwork.as_deref(), cx)),
+    )
+}
+
+fn album_detail_metadata(display: &AlbumDisplay, cx: &gpui::App) -> impl IntoElement {
+    let theme = cx.theme();
+
+    v_flex()
+        .gap_1()
+        .child(div().text_xl().font_semibold().child(display.title.clone()))
+        .when_some(album_stats_line(display), |this, line| {
+            this.child(
                 div()
-                    .w(px(DETAIL_ARTWORK_SIZE))
-                    .h(px(DETAIL_ARTWORK_SIZE))
-                    .rounded(theme.radius)
-                    .overflow_hidden()
-                    .bg(theme.muted)
-                    .border_1()
-                    .border_color(theme.border)
-                    .child(artwork_content(display.artwork.as_deref(), cx)),
-            ),
-        )
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child(line),
+            )
+        })
         .child(
-            v_flex()
+            div()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .child(display.artists.clone()),
+        )
+}
+
+fn album_tags_editor(
+    view: &Entity<AlbumViewerPage>,
+    display: &AlbumDisplay,
+    tag_input: &Entity<InputState>,
+    tag_suggestions: &[String],
+    tag_menu_open: bool,
+    tag_input_bounds: Bounds<Pixels>,
+    cx: &gpui::App,
+) -> impl IntoElement {
+    let theme = cx.theme();
+    let query = tag_input.read(cx).text().to_string();
+    let filtered = filter_tag_suggestions(tag_suggestions, query.trim());
+    let show_menu = tag_menu_open
+        && !tag_suggestions.is_empty()
+        && (query.trim().is_empty() || !filtered.is_empty());
+    let album_id = display.album_id.0;
+
+    v_flex()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .font_medium()
+                .text_color(theme.muted_foreground)
+                .child("Genres / Tags"),
+        )
+        .when(!display.library_genres.is_empty(), |this| {
+            this.child(
+                div().flex().flex_wrap().gap_2().children(
+                    display
+                        .library_genres
+                        .iter()
+                        .map(|genre| library_genre_chip(genre)),
+                ),
+            )
+        })
+        .when(!display.user_tags.is_empty(), |this| {
+            this.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .children(display.user_tags.iter().map(|tag| user_tag_chip(view, tag))),
+            )
+        })
+        .child(
+            h_flex()
+                .w_full()
                 .gap_1()
-                .child(div().text_xl().font_semibold().child(display.title.clone()))
-                .when_some(album_stats_line(display), |this, line| {
-                    this.child(
-                        div()
-                            .text_sm()
-                            .text_color(theme.muted_foreground)
-                            .child(line),
-                    )
-                })
+                .items_center()
+                .child(tag_input_with_suggestions(
+                    view,
+                    tag_input,
+                    &filtered,
+                    show_menu,
+                    tag_input_bounds,
+                    album_id,
+                    cx,
+                ))
                 .child(
-                    div()
-                        .text_sm()
-                        .text_color(theme.muted_foreground)
-                        .child(display.artists.clone()),
+                    Button::new(("album-add-tag", album_id))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Plus)
+                        .tooltip("Add tag")
+                        .on_click({
+                            let view = view.clone();
+                            move |_, window, cx| {
+                                view.update(cx, |view, cx| {
+                                    view.commit_new_tag(window, cx);
+                                });
+                            }
+                        }),
                 ),
         )
-        .when(!display.genres.is_empty(), |this| {
+}
+
+fn tag_input_with_suggestions(
+    view: &Entity<AlbumViewerPage>,
+    tag_input: &Entity<InputState>,
+    filtered_suggestions: &[String],
+    show_menu: bool,
+    menu_bounds: Bounds<Pixels>,
+    album_id: u64,
+    cx: &gpui::App,
+) -> impl IntoElement {
+    let theme = cx.theme();
+    let view_for_capture = view.clone();
+    let view_for_toggle = view.clone();
+    let view_for_dismiss = view.clone();
+    let popup_radius = theme.radius.min(px(8.));
+
+    div()
+        .relative()
+        .flex_1()
+        .min_w_0()
+        .child(
+            h_flex()
+                .w_full()
+                .items_center()
+                .border_1()
+                .border_color(theme.input)
+                .rounded(theme.radius)
+                .bg(theme.background)
+                .overflow_hidden()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .capture_any_mouse_down({
+                            move |_, _, cx| {
+                                view_for_capture.update(cx, |view, cx| {
+                                    view.open_tag_menu(cx);
+                                });
+                            }
+                        })
+                        .child(Input::new(tag_input).small().appearance(false)),
+                )
+                .child(
+                    Button::new(("album-tag-menu", album_id))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::ChevronDown)
+                        .tooltip("Browse tags")
+                        .on_click({
+                            move |_, _, cx| {
+                                view_for_toggle.update(cx, |view, cx| {
+                                    view.toggle_tag_menu(cx);
+                                });
+                            }
+                        }),
+                ),
+        )
+        .on_prepaint({
+            let view = view.clone();
+            move |bounds, _, cx| {
+                view.update(cx, |view, _| {
+                    view.tag_input_bounds = bounds;
+                });
+            }
+        })
+        .when(show_menu, |this| {
             this.child(
-                v_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_medium()
-                            .text_color(theme.muted_foreground)
-                            .child("Genres"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_2()
-                            .children(display.genres.iter().map(|genre| genre_chip(genre))),
-                    ),
+                deferred(tag_suggestions_menu(
+                    view,
+                    filtered_suggestions,
+                    menu_bounds,
+                    popup_radius,
+                    view_for_dismiss,
+                    cx,
+                ))
+                .with_priority(1),
             )
         })
 }
 
-fn genre_chip(genre: &str) -> impl IntoElement {
+fn tag_suggestions_menu(
+    view: &Entity<AlbumViewerPage>,
+    suggestions: &[String],
+    bounds: Bounds<Pixels>,
+    popup_radius: Pixels,
+    view_for_dismiss: Entity<AlbumViewerPage>,
+    cx: &gpui::App,
+) -> AnyElement {
+    let theme = cx.theme();
+
+    anchored()
+        .snap_to_window_with_margin(px(8.))
+        .child(
+            div().occlude().w(bounds.size.width).child(
+                v_flex()
+                    .occlude()
+                    .mt_1p5()
+                    .bg(theme.background)
+                    .border_1()
+                    .border_color(theme.border)
+                    .rounded(popup_radius)
+                    .shadow_md()
+                    .max_h(rems(TAG_MENU_MAX_HEIGHT))
+                    .overflow_hidden()
+                    .py_1()
+                    .children(suggestions.iter().enumerate().map(|(index, label)| {
+                        let view = view.clone();
+                        let label = label.clone();
+
+                        div()
+                            .id(("album-tag-suggestion", index))
+                            .px_3()
+                            .py_1p5()
+                            .text_sm()
+                            .cursor_pointer()
+                            .hover(|this| this.bg(theme.muted))
+                            .child(label.clone())
+                            .on_click(move |_, window, cx| {
+                                view.update(cx, |view, cx| {
+                                    view.pick_tag_suggestion(&label, window, cx);
+                                });
+                            })
+                    }))
+                    .on_mouse_down_out(move |_, _, cx| {
+                        view_for_dismiss.update(cx, |view, cx| {
+                            view.close_tag_menu(cx);
+                        });
+                    }),
+            ),
+        )
+        .into_any_element()
+}
+
+fn library_genre_chip(genre: &str) -> impl IntoElement {
     Tag::new().small().outline().child(genre.to_string())
+}
+
+fn user_tag_chip(view: &Entity<AlbumViewerPage>, tag: &str) -> impl IntoElement {
+    let view = view.clone();
+    let tag = tag.to_string();
+
+    let tag_element = Tag::new().small().child(tag.clone()).child(
+        Button::new(("remove-tag-button", hash(&tag)))
+            .icon(IconName::Close)
+            .ghost()
+            .xsmall()
+            .on_click(move |_, _, cx| {
+                view.update(cx, |view, cx| {
+                    view.remove_user_tag(&tag, cx);
+                });
+            }),
+    );
+
+    h_flex().items_center().gap_1().child(tag_element)
 }
 
 fn build_album_track_list_rows(tracks: &[TrackRow]) -> Vec<AlbumTrackListRow> {
@@ -348,8 +739,7 @@ fn track_row(track: &TrackRow, stripe: bool, cx: &gpui::App) -> impl IntoElement
         .items_center()
         .gap_3()
         .px_4()
-        .rounded(cx.theme().radius)
-        .when(stripe, |this| this.bg(theme.muted.opacity(0.35)))
+        .when(stripe, |this| this.bg(theme.list_even))
         .child(
             div()
                 .w(px(32.))
@@ -442,5 +832,22 @@ mod tests {
             rows.iter()
                 .any(|row| matches!(row.kind, AlbumTrackListRowKind::DiscHeader { .. }))
         );
+    }
+
+    #[test]
+    fn track_rows_alternate_stripes() {
+        let tracks = vec![
+            track(1, "A", None, Some(1)),
+            track(2, "B", None, Some(2)),
+            track(3, "C", None, Some(3)),
+        ];
+        let stripes: Vec<bool> = build_album_track_list_rows(&tracks)
+            .into_iter()
+            .filter_map(|row| match row.kind {
+                AlbumTrackListRowKind::Track { stripe, .. } => Some(stripe),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(stripes, vec![true, false, true]);
     }
 }

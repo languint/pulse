@@ -44,6 +44,39 @@ pub struct SongOverride {
     pub comment: Option<String>,
 }
 
+impl AlbumOverride {
+    #[must_use]
+    pub const fn is_metadata_empty(&self) -> bool {
+        self.title.is_none()
+            && self.artwork.is_none()
+            && self.genres.is_none()
+            && self.tags.is_none()
+            && self.comment.is_none()
+    }
+
+    /// User-added labels from both `genres` and `tags` override fields.
+    #[must_use]
+    pub fn user_labels(&self) -> Vec<String> {
+        override_entry_labels(self.genres.as_ref(), self.tags.as_ref())
+    }
+}
+
+impl ArtistOverride {
+    /// User-added labels from both `genres` and `tags` override fields.
+    #[must_use]
+    pub fn user_labels(&self) -> Vec<String> {
+        override_entry_labels(self.genres.as_ref(), self.tags.as_ref())
+    }
+}
+
+impl SongOverride {
+    /// User-added labels from both `genres` and `tags` override fields.
+    #[must_use]
+    pub fn user_labels(&self) -> Vec<String> {
+        override_entry_labels(self.genres.as_ref(), self.tags.as_ref())
+    }
+}
+
 impl UserOverrides {
     /// Loads user metadata overrides from disk, or defaults when the file is missing.
     ///
@@ -94,6 +127,44 @@ impl UserOverrides {
         self.songs.get(key)
     }
 
+    /// All user-added labels across albums, artists, and songs.
+    #[must_use]
+    pub fn all_user_labels(&self) -> Vec<String> {
+        let mut labels = Vec::new();
+        labels.extend(
+            self.albums
+                .values()
+                .flat_map(AlbumOverride::user_labels),
+        );
+        labels.extend(
+            self.artists
+                .values()
+                .flat_map(ArtistOverride::user_labels),
+        );
+        labels.extend(self.songs.values().flat_map(SongOverride::user_labels));
+        dedupe_user_labels(&labels)
+    }
+
+    /// Replaces user-added album labels, persisted under `tags` in `overrides.json`.
+    pub fn set_album_user_labels(&mut self, key: String, labels: &[String]) {
+        let labels = dedupe_user_labels(labels);
+
+        if labels.is_empty() {
+            if let Some(entry) = self.albums.get_mut(&key) {
+                entry.tags = None;
+                entry.genres = None;
+                if entry.is_metadata_empty() {
+                    self.albums.remove(&key);
+                }
+            }
+            return;
+        }
+
+        let entry = self.albums.entry(key).or_default();
+        entry.tags = Some(labels);
+        entry.genres = None;
+    }
+
     #[must_use]
     pub fn resolve_artwork<'a>(
         paths: &'a PulsePaths,
@@ -122,18 +193,53 @@ fn normalize_key(value: &str) -> String {
     value.trim().to_ascii_lowercase()
 }
 
+fn dedupe_user_labels(labels: &[String]) -> Vec<String> {
+    collect_user_labels(labels.iter().map(String::as_str))
+}
+
+fn override_entry_labels(
+    genres: Option<&Vec<String>>,
+    tags: Option<&Vec<String>>,
+) -> Vec<String> {
+    collect_user_labels(
+        genres
+            .into_iter()
+            .flatten()
+            .chain(tags.into_iter().flatten())
+            .map(String::as_str),
+    )
+}
+
+fn collect_user_labels<'a>(labels: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut unique = Vec::new();
+
+    for label in labels {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let key = normalize_key(trimmed);
+        if seen.insert(key) {
+            unique.push(trimmed.to_string());
+        }
+    }
+
+    unique.sort_by_key(|label| label.to_ascii_lowercase());
+    unique
+}
+
+#[must_use]
+pub fn album_user_labels(override_entry: Option<&AlbumOverride>) -> Vec<String> {
+    override_entry
+        .map(AlbumOverride::user_labels)
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn stable_override_keys() {
-        assert_eq!(
-            album_override_key("Abbey Road", "The Beatles"),
-            "abbey road|the beatles"
-        );
-        assert_eq!(artist_override_key("The Beatles"), "the beatles");
-    }
 
     #[test]
     fn round_trips_overrides() -> Result<(), Box<dyn std::error::Error>> {
@@ -162,5 +268,60 @@ mod tests {
             return Err("expected favorite tag override".into());
         }
         Ok(())
+    }
+
+    #[test]
+    fn stable_override_keys() {
+        assert_eq!(
+            album_override_key("Abbey Road", "The Beatles"),
+            "abbey road|the beatles"
+        );
+        assert_eq!(artist_override_key("The Beatles"), "the beatles");
+    }
+
+    #[test]
+    fn merges_user_genres_and_tags() {
+        let entry = AlbumOverride {
+            genres: Some(vec!["Rock".into(), "rock".into()]),
+            tags: Some(vec!["Favorite".into()]),
+            ..AlbumOverride::default()
+        };
+
+        assert_eq!(
+            entry.user_labels(),
+            vec!["Favorite".to_string(), "Rock".to_string()]
+        );
+    }
+
+    #[test]
+    fn all_user_labels_collects_across_entities() {
+        let mut overrides = UserOverrides::default();
+        overrides.albums.insert(
+            "a|b".into(),
+            AlbumOverride {
+                tags: Some(vec!["Album Tag".into()]),
+                ..AlbumOverride::default()
+            },
+        );
+        overrides.artists.insert(
+            "artist".into(),
+            ArtistOverride {
+                tags: Some(vec!["Artist Tag".into(), "album tag".into()]),
+                ..ArtistOverride::default()
+            },
+        );
+
+        let labels = overrides.all_user_labels();
+        assert_eq!(labels, vec!["Album Tag", "Artist Tag"]);
+    }
+
+    #[test]
+    fn set_album_user_labels_clears_empty_entry() {
+        let mut overrides = UserOverrides::default();
+        let key = album_override_key("Album", "Artist");
+        overrides.set_album_user_labels(key.clone(), &["Synthwave".into()]);
+        overrides.set_album_user_labels(key.clone(), &[]);
+
+        assert!(overrides.album(&key).is_none());
     }
 }
