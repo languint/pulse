@@ -20,7 +20,7 @@ use crate::icons::PulseIcon;
 
 use super::common::{
     ArtistDisplay, CatalogFingerprint, TagCount, artwork_tile_content, catalog_fingerprint,
-    empty_state, overrides_generation, resolve_artist_display,
+    empty_state, overrides_generation, page_back_label, resolve_artist_display,
 };
 
 const DETAIL_PANEL_WIDTH: f32 = 360.;
@@ -233,7 +233,7 @@ impl Render for ArtistViewerPage {
             .size_full()
             .flex()
             .flex_col()
-            .child(h_flex_back_button(pulse))
+            .child(h_flex_back_button(pulse, cx))
             .child(
                 div()
                     .flex_1()
@@ -260,14 +260,17 @@ impl Render for ArtistViewerPage {
     }
 }
 
-fn h_flex_back_button(pulse: Entity<Pulse>) -> impl IntoElement {
+fn h_flex_back_button(pulse: Entity<Pulse>, cx: &gpui::App) -> impl IntoElement {
+    let back_label = page_back_label(cx, pulse.read(cx).back_target());
+
     h_flex().items_center().gap_2().px_6().pt_6().pb_4().child(
         Button::new("artist-back")
             .icon(IconName::ArrowLeft)
+            .label(back_label)
             .outline()
             .on_click(move |_, _, cx| {
                 pulse.update(cx, |pulse, cx| {
-                    pulse.show_artists(cx);
+                    pulse.go_back(cx);
                 });
             }),
     )

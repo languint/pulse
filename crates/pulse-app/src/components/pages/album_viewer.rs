@@ -23,7 +23,7 @@ use crate::data::save_album_user_labels;
 use super::common::{
     AlbumDisplay, CatalogFingerprint, TrackRow, album_label_is_taken, catalog_fingerprint,
     collect_suggested_labels, empty_state, filter_tag_suggestions, format_album_duration_ms,
-    overrides_generation, resolve_album_display, AlbumArtistEntry,
+    overrides_generation, page_back_label, resolve_album_display, AlbumArtistEntry,
 };
 
 const DETAIL_PANEL_WIDTH: f32 = 360.;
@@ -309,7 +309,7 @@ impl Render for AlbumViewerPage {
             .size_full()
             .flex()
             .flex_col()
-            .child(h_flex_back_button(pulse))
+            .child(h_flex_back_button(pulse, cx))
             .child(
                 div()
                     .flex_1()
@@ -345,16 +345,19 @@ impl Render for AlbumViewerPage {
     }
 }
 
-fn h_flex_back_button(pulse: Entity<Pulse>) -> impl IntoElement {
+fn h_flex_back_button(pulse: Entity<Pulse>, cx: &gpui::App) -> impl IntoElement {
     use gpui_component::h_flex;
+
+    let back_label = page_back_label(cx, pulse.read(cx).back_target());
 
     h_flex().items_center().gap_2().px_6().pt_6().pb_4().child(
         Button::new("album-back")
             .icon(IconName::ArrowLeft)
+            .label(back_label)
             .outline()
             .on_click(move |_, _, cx| {
                 pulse.update(cx, |pulse, cx| {
-                    pulse.show_albums(cx);
+                    pulse.go_back(cx);
                 });
             }),
     )

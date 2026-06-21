@@ -5,14 +5,15 @@ use std::rc::Rc;
 use crate::data::{DataOverrides, DataPaths, OverridesGeneration};
 use gpui::{
     AnyElement, InteractiveElement, IntoElement, ObjectFit, ParentElement, Pixels, SharedString,
-    Size, StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder,
-    px, size,
+    Size, StatefulInteractiveElement, Styled, StyledImage, TruncateFrom, Window, div, font, img,
+    prelude::FluentBuilder, px, size,
 };
 use gpui_component::{ActiveTheme, Icon, IconName, StyledExt as _, tooltip::Tooltip, v_flex};
 use pulse_data::{UserOverrides, album_override_key, album_user_labels, artist_override_key, artist_user_labels};
 use pulse_model::{Album, AlbumArtists, Artist, ArtistId, ArtworkId, Song, SongId, ThumbnailSize};
 
 use crate::artwork_prefetch;
+use crate::components::navigation::PulsePage;
 use crate::library::PulseLibrary;
 
 pub const GRID_MIN_CELL_WIDTH: f32 = 140.;
@@ -25,6 +26,7 @@ pub const GRID_SUBTITLE_LINE_HEIGHT: f32 = 20.;
 pub const GRID_GAP: f32 = 16.;
 const SIDEBAR_WIDTH: f32 = 255.;
 const PAGE_HORIZONTAL_INSET: f32 = 48.;
+const GRID_LABEL_ELLIPSIS: &str = "…";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GridLayout {
@@ -115,6 +117,18 @@ pub fn catalog_fingerprint(cx: &gpui::App) -> CatalogFingerprint {
         albums: store.albums().len(),
         songs: store.songs().len(),
         artists: store.artists().len(),
+    }
+}
+
+#[must_use]
+pub fn page_back_label(cx: &gpui::App, page: PulsePage) -> SharedString {
+    match page {
+        PulsePage::Albums => "Albums".into(),
+        PulsePage::Artists => "Artists".into(),
+        PulsePage::AlbumDetail(id) => resolve_album_display(cx, id)
+            .map_or_else(|| "Album".into(), |display| display.title),
+        PulsePage::ArtistDetail(id) => resolve_artist_display(cx, id)
+            .map_or_else(|| "Artist".into(), |display| display.name),
     }
 }
 
@@ -863,6 +877,7 @@ pub fn media_card(item: &GridItem, params: MediaCardParams, cx: &gpui::App) -> i
             (grid_id, cell_ix.saturating_mul(2)),
             item.title.clone(),
             GridLabelStyle::Title,
+            px(layout.cell_width),
             cx,
         ))
         .when(!item.subtitle.is_empty(), |this| {
@@ -870,6 +885,7 @@ pub fn media_card(item: &GridItem, params: MediaCardParams, cx: &gpui::App) -> i
                 (grid_id, cell_ix.saturating_mul(2).saturating_add(1)),
                 item.subtitle.clone(),
                 GridLabelStyle::Subtitle,
+                px(layout.cell_width),
                 cx,
             ))
         });
@@ -918,17 +934,54 @@ impl GridLabelStyle {
             Self::Subtitle => GRID_SUBTITLE_LINE_HEIGHT,
         }
     }
+
+    fn font_size(self, base: Pixels) -> Pixels {
+        match self {
+            Self::Title => scale_pixels(base, 0.875),
+            Self::Subtitle => scale_pixels(base, 0.75),
+        }
+    }
+}
+
+#[allow(clippy::arithmetic_side_effects)]
+fn scale_pixels(value: Pixels, factor: f32) -> Pixels {
+    px(value.as_f32() * factor)
+}
+
+fn clamped_text_is_truncated(
+    text: &SharedString,
+    style: GridLabelStyle,
+    max_width: Pixels,
+    cx: &gpui::App,
+) -> bool {
+    let theme = cx.theme();
+    let font_size = style.font_size(theme.font_size);
+    let mut wrapper = cx
+        .text_system()
+        .line_wrapper(font(theme.font_family.clone()), font_size);
+    let (truncated, _) = wrapper.truncate_wrapped_line(
+        text.clone(),
+        max_width,
+        GRID_LABEL_LINES,
+        GRID_LABEL_ELLIPSIS,
+        &[],
+        TruncateFrom::End,
+    );
+
+    truncated.as_str() != text.as_str()
 }
 
 fn grid_label(
     element_id: impl Into<gpui::ElementId>,
     text: SharedString,
     style: GridLabelStyle,
+    max_width: Pixels,
     cx: &gpui::App,
 ) -> impl IntoElement {
     let theme = cx.theme();
     let tooltip_text = text.clone();
     let label_height = px(style.line_height() * GRID_LABEL_LINES_F32);
+    let show_tooltip = clamped_text_is_truncated(&text, style, max_width, cx);
 
     let mut label = div()
         .w_full()
@@ -942,10 +995,15 @@ fn grid_label(
         GridLabelStyle::Subtitle => label.text_xs().text_color(theme.muted_foreground),
     };
 
-    label
-        .id(element_id)
-        .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx))
-        .child(text)
+    let label = label.id(element_id);
+
+    if show_tooltip {
+        label
+            .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx))
+            .child(text)
+    } else {
+        label.child(text)
+    }
 }
 
 pub fn artwork_tile_content(path: Option<&Path>, cx: &gpui::App) -> AnyElement {

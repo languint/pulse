@@ -43,4 +43,31 @@ impl PulsePage {
             Self::Albums | Self::Artists | Self::AlbumDetail(_) => None,
         }
     }
+
+    /// Top-level list page for this section, used when there is no navigation history.
+    #[must_use]
+    pub const fn section_fallback(self) -> Self {
+        match self {
+            Self::Albums | Self::AlbumDetail(_) => Self::Albums,
+            Self::Artists | Self::ArtistDetail(_) => Self::Artists,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pulse_model::{AlbumId, ArtistId};
+
+    #[test]
+    fn section_fallback_returns_list_page_for_detail_views() {
+        assert_eq!(
+            PulsePage::AlbumDetail(AlbumId(1)).section_fallback(),
+            PulsePage::Albums
+        );
+        assert_eq!(
+            PulsePage::ArtistDetail(ArtistId(2)).section_fallback(),
+            PulsePage::Artists
+        );
+    }
 }

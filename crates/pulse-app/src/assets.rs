@@ -7,7 +7,6 @@ use std::borrow::Cow;
 #[include = "icons/**/*.svg"]
 struct PulseAssets;
 
-/// Loads Pulse icons first, then falls back to gpui-component's bundled set.
 pub struct CombinedAssets;
 
 impl AssetSource for CombinedAssets {

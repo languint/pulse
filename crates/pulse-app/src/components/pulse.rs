@@ -22,6 +22,7 @@ pub mod icon;
 pub struct Pulse {
     pub focus_handle: FocusHandle,
     page: PulsePage,
+    previous_page: Option<PulsePage>,
     toolbar: Entity<Toolbar>,
     sidebar: Entity<AppSidebar>,
     albums_page: Entity<AlbumsPage>,
@@ -37,6 +38,7 @@ impl Pulse {
         Self {
             focus_handle: cx.focus_handle(),
             page: PulsePage::Albums,
+            previous_page: None,
             toolbar: cx.new(Toolbar::new),
             sidebar: cx.new(|_| AppSidebar::new(pulse.clone())),
             albums_page: cx.new(|cx| AlbumsPage::new(pulse.clone(), cx)),
@@ -51,32 +53,64 @@ impl Pulse {
         self.page
     }
 
+    #[must_use]
+    pub const fn previous_page(&self) -> Option<PulsePage> {
+        self.previous_page
+    }
+
+    #[must_use]
+    pub fn back_target(&self) -> PulsePage {
+        self.previous_page
+            .unwrap_or_else(|| self.page.section_fallback())
+    }
+
     pub fn set_page(&mut self, page: PulsePage, cx: &mut gpui::Context<Self>) {
         if self.page == page {
             return;
         }
 
+        self.previous_page = None;
         self.page = page;
         cx.notify();
     }
 
     pub fn open_album(&mut self, album_id: AlbumId, cx: &mut gpui::Context<Self>) {
-        self.page = PulsePage::AlbumDetail(album_id);
-        cx.notify();
+        self.navigate_to(PulsePage::AlbumDetail(album_id), cx);
     }
 
     pub fn open_artist(&mut self, artist_id: ArtistId, cx: &mut gpui::Context<Self>) {
-        self.page = PulsePage::ArtistDetail(artist_id);
+        self.navigate_to(PulsePage::ArtistDetail(artist_id), cx);
+    }
+
+    pub fn go_back(&mut self, cx: &mut gpui::Context<Self>) {
+        let destination = self
+            .previous_page
+            .take()
+            .unwrap_or_else(|| self.page.section_fallback());
+
+        if self.page == destination {
+            return;
+        }
+
+        self.page = destination;
         cx.notify();
     }
 
     pub fn show_albums(&mut self, cx: &mut gpui::Context<Self>) {
-        self.page = PulsePage::Albums;
-        cx.notify();
+        self.set_page(PulsePage::Albums, cx);
     }
 
     pub fn show_artists(&mut self, cx: &mut gpui::Context<Self>) {
-        self.page = PulsePage::Artists;
+        self.set_page(PulsePage::Artists, cx);
+    }
+
+    fn navigate_to(&mut self, page: PulsePage, cx: &mut gpui::Context<Self>) {
+        if self.page == page {
+            return;
+        }
+
+        self.previous_page = Some(self.page);
+        self.page = page;
         cx.notify();
     }
 }
