@@ -4,12 +4,40 @@ use std::{
     time::Duration,
 };
 
-use gpui::{App, AsyncApp, UpdateGlobal};
+use gpui::{App, AsyncApp, Global, UpdateGlobal};
 use pulse_library::{LibraryConfig, MusicLibrary, ScanSummary};
 use pulse_runtime::Tokio;
 
 use crate::config::PulseConfig;
 use crate::data::{DataPaths, persist_settings};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LibraryScanState {
+    active_scans: u32,
+}
+
+impl LibraryScanState {
+    #[must_use]
+    pub fn is_in_progress(cx: &App) -> bool {
+        cx.global::<Self>().active_scans > 0
+    }
+
+    fn begin(cx: &mut App) {
+        Self::update_global(cx, |state, _| {
+            state.active_scans = state.active_scans.saturating_add(1);
+        });
+        cx.refresh_windows();
+    }
+
+    fn end(cx: &mut App) {
+        Self::update_global(cx, |state, _| {
+            state.active_scans = state.active_scans.saturating_sub(1);
+        });
+        cx.refresh_windows();
+    }
+}
+
+impl Global for LibraryScanState {}
 
 pub struct PulseLibrary(MusicLibrary);
 
@@ -54,6 +82,7 @@ impl PulseLibrary {
         let roots: Vec<_> = pulse_library::resolve_roots(&config);
 
         LibraryScanCoordinator::set_global(cx, LibraryScanCoordinator::install(cx));
+        LibraryScanState::set_global(cx, LibraryScanState::default());
         Self::set_global(cx, Self::new(config, artwork_cache_dir));
 
         tracing::info!(roots = roots.len(), ?roots, "initializing music library");
@@ -83,7 +112,8 @@ impl PulseLibrary {
         Self::spawn_scan(cx);
     }
 
-    fn spawn_scan(cx: &App) {
+    fn spawn_scan(cx: &mut App) {
+        LibraryScanState::begin(cx);
         let (config, artwork_cache_dir) = Self::scan_inputs(cx);
         let handle = Tokio::handle(cx);
 
@@ -102,6 +132,8 @@ impl PulseLibrary {
     }
 
     fn schedule_background_scan(async_cx: &AsyncApp) {
+        async_cx.update(LibraryScanState::begin);
+
         let (config, artwork_cache_dir) = async_cx.update(|app| Self::scan_inputs(app));
         let handle = Tokio::handle(async_cx);
 
@@ -137,19 +169,20 @@ impl PulseLibrary {
             pulse_runtime::JoinError,
         >,
     ) {
-        let Ok((library, result)) = scanned else {
-            tracing::error!("music library scan task failed");
-            return;
-        };
-
         async_cx.update(|app| {
+            let Ok((library, result)) = scanned else {
+                tracing::error!("music library scan task failed");
+                LibraryScanState::end(app);
+                return;
+            };
+
             Self::set_global(app, Self(library));
             match result {
                 Ok(summary) => log_scan_complete(&summary),
                 Err(error) => log_scan_error(&error),
             }
             Self::ensure_watcher(app);
-            app.refresh_windows();
+            LibraryScanState::end(app);
         });
     }
 

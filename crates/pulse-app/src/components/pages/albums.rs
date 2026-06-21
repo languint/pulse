@@ -7,7 +7,7 @@ use crate::components::pulse::Pulse;
 
 use super::common::{
     CatalogFingerprint, GridItem, GridLayout, catalog_fingerprint, collect_album_items,
-    grid_item_sizes, page_shell,
+    grid_item_sizes, overrides_generation, page_shell,
 };
 use super::grid::{VirtualThumbnailGridParams, virtual_thumbnail_grid};
 
@@ -16,6 +16,7 @@ pub struct AlbumsPage {
     scroll_handle: VirtualListScrollHandle,
     cached_items: Arc<[GridItem]>,
     catalog_fp: CatalogFingerprint,
+    overrides_gen: u32,
     cached_layout: GridLayout,
     cached_item_sizes: std::rc::Rc<Vec<gpui::Size<gpui::Pixels>>>,
 }
@@ -29,6 +30,7 @@ impl AlbumsPage {
             scroll_handle: VirtualListScrollHandle::new(),
             cached_items: Arc::from([]),
             catalog_fp: CatalogFingerprint::default(),
+            overrides_gen: 0,
             cached_layout: layout,
             cached_item_sizes: grid_item_sizes(layout, 0),
         }
@@ -36,12 +38,14 @@ impl AlbumsPage {
 
     fn ensure_items(&mut self, cx: &gpui::App) {
         let fp = catalog_fingerprint(cx);
-        if fp == self.catalog_fp {
+        let overrides_gen = overrides_generation(cx);
+        if fp == self.catalog_fp && overrides_gen == self.overrides_gen {
             return;
         }
 
         self.cached_items = collect_album_items(cx).into();
         self.catalog_fp = fp;
+        self.overrides_gen = overrides_gen;
     }
 
     fn ensure_item_sizes(&mut self, layout: GridLayout) {

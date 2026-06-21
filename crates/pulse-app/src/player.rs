@@ -2,8 +2,9 @@ use std::path::PathBuf;
 
 use gpui::{App, Global, SharedString, UpdateGlobal};
 use pulse_audio::{PlaybackState, Player, PlayerSnapshot, TrackInfo};
-use pulse_model::{Song, SongId, ThumbnailSize};
+use pulse_model::{Song, SongId};
 
+use crate::components::pages::{format_album_artists, resolve_album_artwork};
 use crate::library::PulseLibrary;
 
 pub struct PulsePlayer {
@@ -144,11 +145,8 @@ impl PulsePlayer {
         song.album_id
             .and_then(|album_id| store.albums().get(&album_id))
             .and_then(|album| {
-                album.artwork_id.and_then(|artwork_id| {
-                    store
-                        .thumbnail_path(artwork_id, ThumbnailSize::Medium)
-                        .map(std::path::Path::to_path_buf)
-                })
+                let artist_label = format_album_artists(store.artists(), &album.album_artists);
+                resolve_album_artwork(cx, album, &artist_label)
             })
     }
 

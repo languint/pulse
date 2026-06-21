@@ -180,6 +180,7 @@ pub struct AlbumDisplay {
     pub year: Option<u16>,
     pub duration_ms: u64,
     pub artwork: Option<PathBuf>,
+    pub has_custom_artwork: bool,
     pub library_genres: Vec<String>,
     pub user_tags: Vec<String>,
     pub tracks: Vec<TrackRow>,
@@ -596,24 +597,20 @@ pub fn collect_album_items(cx: &gpui::App) -> Vec<GridItem> {
             let artist_label = format_album_artists(artists, &album.album_artists);
             let override_key = album_override_key(&album.title, &artist_label);
             let user_override = cx.global::<DataOverrides>().album(&override_key);
-            let paths = cx.global::<DataPaths>();
 
             let title = user_override
                 .and_then(|entry| entry.title.as_deref())
                 .unwrap_or(&album.title);
 
-            let thumbnail = user_override
-                .and_then(|entry| entry.artwork.as_deref())
-                .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)))
-                .or_else(|| album_thumbnail_path(store, album.artwork_id));
+            let artwork = resolve_album_artwork(cx, album, &artist_label);
 
             GridItem {
                 album_id: Some(album.id),
                 artist_id: None,
                 title: title.to_string().into(),
                 subtitle: artist_label.into(),
-                thumbnail,
-                detail_artwork: album_detail_artwork_path(store, album.artwork_id),
+                thumbnail: artwork.clone(),
+                detail_artwork: artwork,
             }
         })
         .collect()
@@ -779,6 +776,9 @@ pub fn resolve_album_display(
         .and_then(|entry| entry.artwork.as_deref())
         .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)))
         .or_else(|| album_detail_artwork_path(store, album.artwork_id));
+    let has_custom_artwork = user_override
+        .and_then(|entry| entry.artwork.as_ref())
+        .is_some();
 
     let mut songs: Vec<&Song> = store
         .songs()
@@ -814,6 +814,7 @@ pub fn resolve_album_display(
         year: album.year,
         duration_ms: total_duration_ms,
         artwork,
+        has_custom_artwork,
         library_genres: library_genres.into_iter().collect(),
         user_tags,
         tracks,
@@ -1034,13 +1035,23 @@ pub fn artwork_tile_content(path: Option<&Path>, cx: &gpui::App) -> AnyElement {
                 )
                 .into_any_element()
         },
-        |path| {
-            img(path)
-                .size_full()
-                .object_fit(ObjectFit::Cover)
-                .into_any_element()
-        },
+        |path| artwork_image(path, cx).into_any_element(),
     )
+}
+
+fn artwork_image(path: &Path, cx: &gpui::App) -> impl IntoElement {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    path.hash(&mut hasher);
+    hasher.write_u32(overrides_generation(cx));
+    let cache_id = hasher.finish();
+
+    img(path)
+        .id(("artwork", cache_id))
+        .size_full()
+        .object_fit(ObjectFit::Cover)
 }
 
 #[cfg(test)]

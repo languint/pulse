@@ -2,13 +2,13 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement, ObjectFit,
+    AnyElement, AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement,
     ParentElement, Pixels, Render, SharedString, Size, StatefulInteractiveElement, Styled,
-    StyledImage, Window, anchored, deferred, div, hash, img, prelude::FluentBuilder, px, rems,
+    Window, anchored, deferred, div, hash, prelude::FluentBuilder, px, rems,
     size,
 };
 use gpui_component::{
-    ActiveTheme, ElementExt, Icon, IconName, Sizable, StyledExt as _, VirtualListScrollHandle,
+    ActiveTheme, ElementExt, IconName, Sizable, StyledExt as _, VirtualListScrollHandle,
     button::{Button, ButtonVariants as _},
     h_flex,
     input::{Input, InputEvent, InputState},
@@ -18,13 +18,14 @@ use gpui_component::{
 use pulse_model::AlbumId;
 
 use crate::components::pulse::Pulse;
-use crate::data::save_album_user_labels;
+use crate::data::{import_and_save_album_cover, save_album_artwork, save_album_user_labels};
+use crate::icons::PulseIcon;
 use crate::player::PulsePlayer;
 
 use super::common::{
     AlbumArtistEntry, AlbumDisplay, CatalogFingerprint, TrackRow, album_label_is_taken,
-    catalog_fingerprint, collect_suggested_labels, empty_state, filter_tag_suggestions,
-    format_album_duration_ms, overrides_generation, resolve_album_display,
+    artwork_tile_content, catalog_fingerprint, collect_suggested_labels, empty_state,
+    filter_tag_suggestions, format_album_duration_ms, overrides_generation, resolve_album_display,
 };
 
 const SIDEBAR_WIDTH: f32 = 255.;
@@ -283,6 +284,55 @@ impl AlbumViewerPage {
         cx.notify();
     }
 
+    fn pick_album_cover(&self, window: &Window, cx: &Context<Self>) {
+        let Some(display) = self.display.clone() else {
+            return;
+        };
+
+        let dialog = rfd::AsyncFileDialog::new()
+            .set_title("Select album cover")
+            .add_filter("Images", &["png", "jpg", "jpeg", "webp", "gif"])
+            .set_parent(window)
+            .pick_file();
+
+        cx.spawn(async move |this, cx| {
+            let Some(handle) = dialog.await else {
+                return;
+            };
+
+            let source = handle.path().to_path_buf();
+            let override_key = display.override_key.clone();
+
+            if let Err(error) =
+                cx.update(|cx| import_and_save_album_cover(cx, &override_key, &source))
+            {
+                tracing::error!(%error, "failed to import album cover");
+                return;
+            }
+
+            this.update(cx, |view, cx| {
+                view.invalidate_album_cache();
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn remove_album_cover(&mut self, cx: &mut Context<Self>) {
+        let Some(override_key) = self
+            .display
+            .as_ref()
+            .map(|display| display.override_key.clone())
+        else {
+            return;
+        };
+
+        save_album_artwork(cx, &override_key, None);
+        self.invalidate_album_cache();
+        cx.notify();
+    }
+
     fn ensure_album(&mut self, album_id: AlbumId, cx: &gpui::App) {
         let fp = catalog_fingerprint(cx);
         let overrides_gen = overrides_generation(cx);
@@ -463,6 +513,7 @@ fn album_detail_panel(
             .border_color(theme.border)
             .bg(theme.muted.opacity(0.35))
             .child(album_artwork_frame(
+                view,
                 display,
                 layout.artwork_size,
                 layout.mode,
@@ -492,6 +543,7 @@ fn album_detail_panel(
                     .gap_4()
                     .items_start()
                     .child(album_artwork_frame(
+                        view,
                         display,
                         layout.artwork_size,
                         layout.mode,
@@ -510,12 +562,15 @@ fn album_detail_panel(
 }
 
 fn album_artwork_frame(
+    view: &Entity<AlbumViewerPage>,
     display: &AlbumDisplay,
     artwork_size: f32,
     layout: AlbumDetailLayoutMode,
     cx: &gpui::App,
 ) -> impl IntoElement {
     let theme = cx.theme();
+    let view_for_pick = view.clone();
+    let view_for_remove = view.clone();
 
     let artwork = div()
         .w(px(artwork_size))
@@ -525,17 +580,56 @@ fn album_artwork_frame(
         .bg(theme.muted)
         .border_1()
         .border_color(theme.border)
-        .child(artwork_content(display.artwork.as_deref(), cx));
+        .child(artwork_tile_content(display.artwork.as_deref(), cx));
+
+    let buttons = h_flex()
+        .justify_end()
+        .gap_2()
+        .child(
+            Button::new(("album-cover-replace", display.album_id.0))
+                .icon(PulseIcon::Pencil)
+                .outline()
+                .on_click(move |_, window, cx| {
+                    view_for_pick.update(cx, |view, cx| {
+                        view.pick_album_cover(window, cx);
+                    });
+                })
+                .tooltip("Replace"),
+        )
+        .when(display.has_custom_artwork, |this| {
+            this.child(
+                Button::new(("album-cover-remove", display.album_id.0))
+                    .icon(PulseIcon::Trash2)
+                    .ghost()
+                    .danger()
+                    .on_click(move |_, _, cx| {
+                        view_for_remove.update(cx, |view, cx| {
+                            view.remove_album_cover(cx);
+                        });
+                    })
+                    .tooltip("Remove"),
+            )
+        });
 
     match layout {
-        AlbumDetailLayoutMode::Sidebar => div()
-            .w_full()
-            .flex()
-            .justify_center()
+        AlbumDetailLayoutMode::Sidebar => v_flex()
+            .gap_2()
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .justify_center()
+                    .flex_shrink_0()
+                    .child(artwork),
+            )
+            .child(buttons)
+            .into_any_element(),
+        AlbumDetailLayoutMode::Stacked => v_flex()
+            .gap_2()
             .flex_shrink_0()
             .child(artwork)
+            .child(buttons)
             .into_any_element(),
-        AlbumDetailLayoutMode::Stacked => artwork.flex_shrink_0().into_any_element(),
     }
 }
 
@@ -982,32 +1076,6 @@ fn track_row(
                 .text_color(theme.muted_foreground)
                 .child(track.duration.clone()),
         )
-}
-
-fn artwork_content(path: Option<&std::path::Path>, cx: &gpui::App) -> AnyElement {
-    let theme = cx.theme();
-
-    path.map_or_else(
-        || {
-            div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    Icon::new(IconName::GalleryVerticalEnd)
-                        .size_10()
-                        .text_color(theme.muted_foreground),
-                )
-                .into_any_element()
-        },
-        |path| {
-            img(path)
-                .size_full()
-                .object_fit(ObjectFit::Cover)
-                .into_any_element()
-        },
-    )
 }
 
 #[cfg(test)]

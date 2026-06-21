@@ -12,6 +12,7 @@ use gpui_component::{
 };
 
 use crate::components::pages::{artwork_tile_content, format_duration_ms};
+use crate::library::LibraryScanState;
 use crate::media_controls;
 use crate::player::PulsePlayer;
 
@@ -90,6 +91,9 @@ impl PlayerBar {
                     .await;
                 entity.update(cx, |_, cx| {
                     media_controls::poll(cx);
+                    if LibraryScanState::is_in_progress(cx) {
+                        cx.refresh_windows();
+                    }
                     cx.notify();
                 });
             }

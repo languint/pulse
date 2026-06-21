@@ -165,6 +165,22 @@ impl UserOverrides {
         entry.genres = None;
     }
 
+    /// Replaces custom album artwork stored under `artwork` in `overrides.json`.
+    pub fn set_album_artwork(&mut self, key: String, artwork: Option<PathBuf>) {
+        if artwork.is_none() {
+            if let Some(entry) = self.albums.get_mut(&key) {
+                entry.artwork = None;
+                if entry.is_metadata_empty() {
+                    self.albums.remove(&key);
+                }
+            }
+            return;
+        }
+
+        let entry = self.albums.entry(key).or_default();
+        entry.artwork = artwork;
+    }
+
     /// Replaces custom artist artwork stored under `artwork` in `overrides.json`.
     pub fn set_artist_artwork(&mut self, key: String, artwork: Option<PathBuf>) {
         if artwork.is_none() {
@@ -356,5 +372,18 @@ mod tests {
         overrides.set_artist_artwork(key.clone(), None);
 
         assert!(overrides.artist(&key).is_none());
+    }
+
+    #[test]
+    fn set_album_artwork_clears_empty_entry() {
+        let mut overrides = UserOverrides::default();
+        let key = album_override_key("Album", "Artist");
+        overrides.set_album_artwork(
+            key.clone(),
+            Some(PathBuf::from("artwork/custom/album.png")),
+        );
+        overrides.set_album_artwork(key.clone(), None);
+
+        assert!(overrides.album(&key).is_none());
     }
 }
