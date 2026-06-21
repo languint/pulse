@@ -4933,6 +4933,7 @@ dependencies = [
  "pulse-keymap",
  "pulse-library",
  "pulse-model",
+ "pulse-runtime",
  "rfd",
  "serde",
  "thiserror 2.0.18",
@@ -4979,6 +4980,7 @@ dependencies = [
  "notify-debouncer-mini",
  "pulse-model",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
@@ -4988,6 +4990,15 @@ dependencies = [
 [[package]]
 name = "pulse-model"
 version = "0.1.0"
+
+[[package]]
+name = "pulse-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "tokio",
+]
 
 [[package]]
 name = "pxfm"

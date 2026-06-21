@@ -3,7 +3,7 @@ use std::sync::Arc;
 use gpui::{Context, Render, Window};
 use gpui_component::VirtualListScrollHandle;
 
-use super::common::{collect_artist_items, page_shell};
+use super::common::{collect_artist_items, page_shell, GridLayout};
 use super::grid::virtual_thumbnail_grid;
 
 pub struct ArtistsPage {
@@ -20,7 +20,8 @@ impl ArtistsPage {
 }
 
 impl Render for ArtistsPage {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
+        let layout = GridLayout::for_window(window);
         let items: Arc<[super::common::GridItem]> = collect_artist_items(cx).into();
 
         page_shell(
@@ -29,6 +30,7 @@ impl Render for ArtistsPage {
                 cx.entity(),
                 "artists-grid",
                 items,
+                layout,
                 &self.scroll_handle,
                 "No artists in your library yet.",
                 cx,

@@ -33,7 +33,7 @@ pub fn scan_roots(
     roots: &[PathBuf],
     artwork_cache: &ArtworkCache,
 ) -> ScanSummary {
-    store.clear();
+    store.clear_catalog();
 
     let mut files_seen = 0_usize;
     let mut songs_imported = 0_usize;

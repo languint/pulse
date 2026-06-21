@@ -26,6 +26,10 @@ fn main() {
         .with_assets(gpui_component_assets::Assets)
         .run(move |cx| {
             gpui_component::init(cx);
+            if let Err(error) = pulse_runtime::init(cx) {
+                tracing::error!(%error, "failed to initialize Tokio runtime");
+                std::process::exit(1);
+            }
 
             let paths = match pulse::load_paths() {
                 Ok(paths) => paths,

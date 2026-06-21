@@ -5,8 +5,10 @@ use std::{
 
 use pulse_model::{
     Album, AlbumArtists, AlbumId, Artist, ArtistId, Artwork, ArtworkId, ArtworkReference,
-    ArtworkThumbnail, EntityMetadata, Song, SongId, ThumbnailSize,
+    ArtworkSource, ArtworkThumbnail, EntityMetadata, Song, SongId, ThumbnailSize,
 };
+
+use crate::artwork::{ArtworkCache, CachedArtworkMeta};
 
 #[derive(Debug, Default)]
 struct IdGenerator {
@@ -35,6 +37,12 @@ impl IdGenerator {
     const fn allocate_artwork(&mut self) -> ArtworkId {
         self.artwork = self.artwork.saturating_add(1);
         ArtworkId(self.artwork)
+    }
+
+    const fn reset_catalog(&mut self) {
+        self.song = 0;
+        self.album = 0;
+        self.artist = 0;
     }
 }
 
@@ -93,6 +101,14 @@ impl LibraryStore {
         self.song_by_path
             .get(path)
             .and_then(|id| self.songs.get(id))
+    }
+
+    pub fn clear_catalog(&mut self) {
+        self.songs.clear();
+        self.albums.clear();
+        self.artists.clear();
+        self.song_by_path.clear();
+        self.ids.reset_catalog();
     }
 
     pub fn clear(&mut self) {
@@ -166,6 +182,36 @@ impl LibraryStore {
 
     pub const fn next_song_id(&mut self) -> SongId {
         self.ids.allocate_song()
+    }
+
+    pub(crate) fn preload_artwork(
+        &mut self,
+        cache: &ArtworkCache,
+        content_hash: &str,
+        meta: &CachedArtworkMeta,
+    ) -> ArtworkId {
+        if let Some(id) = self.artwork_id_for_hash(content_hash) {
+            return id;
+        }
+
+        let artwork_id = self.insert_artwork(
+            Artwork {
+                id: ArtworkId(0),
+                source: ArtworkSource::Cached {
+                    path: cache.source_path(content_hash, &meta.extension),
+                },
+                width: Some(meta.width),
+                height: Some(meta.height),
+                dominant_color: None,
+            },
+            content_hash,
+        );
+
+        for size in ThumbnailSize::all() {
+            self.insert_thumbnail(artwork_id, size, cache.thumbnail_path(content_hash, size));
+        }
+
+        artwork_id
     }
 
     pub(crate) fn insert_artwork(&mut self, mut artwork: Artwork, content_hash: &str) -> ArtworkId {

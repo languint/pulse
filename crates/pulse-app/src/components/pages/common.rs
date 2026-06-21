@@ -1,36 +1,102 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::data::{DataOverrides, DataPaths};
 use gpui::{
-    AnyElement, img, InteractiveElement, IntoElement, ObjectFit, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled, StyledImage, div, prelude::FluentBuilder, px,
+    AnyElement, InteractiveElement, IntoElement, ObjectFit, ParentElement, SharedString,
+    StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder, px,
 };
 use gpui_component::{ActiveTheme, Icon, IconName, StyledExt as _, tooltip::Tooltip, v_flex};
-use crate::data::{DataOverrides, DataPaths};
 use pulse_data::{UserOverrides, album_override_key, artist_override_key};
 use pulse_model::{Album, AlbumArtists, Artist, ArtistId, ArtworkId, ThumbnailSize};
 
 use crate::library::PulseLibrary;
 
-pub const THUMB_SIZE: f32 = 160.;
-pub const CARD_WIDTH: f32 = 160.;
-pub const GRID_COLUMNS: usize = 5;
+pub const GRID_MIN_CELL_WIDTH: f32 = 140.;
 pub const GRID_LABEL_LINES: usize = 2;
 const GRID_LABEL_LINES_F32: f32 = 2.;
-/// Vertical space between virtualized grid rows.
 pub const GRID_ROW_GAP: f32 = 12.;
-/// `gap_2` between thumb, title, and subtitle inside a card.
 pub const GRID_CARD_GAP: f32 = 8.;
-/// Approximate single-line heights (`font_size * phi()` at 16px rem).
 pub const GRID_TITLE_LINE_HEIGHT: f32 = 22.;
 pub const GRID_SUBTITLE_LINE_HEIGHT: f32 = 20.;
-/// Thumb + borders + gaps + two-line title + two-line subtitle.
-pub const GRID_ROW_HEIGHT: f32 = THUMB_SIZE
-    + 2.
-    + GRID_CARD_GAP * 2.
-    + GRID_TITLE_LINE_HEIGHT * GRID_LABEL_LINES_F32
-    + GRID_SUBTITLE_LINE_HEIGHT * GRID_LABEL_LINES_F32;
 pub const GRID_GAP: f32 = 16.;
+const SIDEBAR_WIDTH: f32 = 255.;
+const PAGE_HORIZONTAL_INSET: f32 = 48.;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GridLayout {
+    pub columns: usize,
+    pub cell_width: f32,
+    pub thumb_size: f32,
+    pub row_height: f32,
+}
+
+impl GridLayout {
+    #[must_use]
+    pub fn for_content_width(content_width: f32) -> Self {
+        if content_width <= 0. {
+            return Self::with_columns(1, GRID_MIN_CELL_WIDTH);
+        }
+
+        let columns = columns_for_width(content_width);
+        let cell_width = cell_width_for(content_width, columns);
+        Self::with_columns(columns, cell_width)
+    }
+
+    #[must_use]
+    pub fn for_window(window: &Window) -> Self {
+        let viewport_width = window.viewport_size().width.as_f32();
+        let content_width = (viewport_width - SIDEBAR_WIDTH).max(0.);
+        let content_width = (content_width - PAGE_HORIZONTAL_INSET).max(0.);
+        Self::for_content_width(content_width)
+    }
+
+    #[must_use]
+    pub const fn with_columns(columns: usize, cell_width: f32) -> Self {
+        let thumb_size = cell_width;
+        let row_height = thumb_size
+            + 2.
+            + GRID_CARD_GAP * 2.
+            + GRID_TITLE_LINE_HEIGHT * GRID_LABEL_LINES_F32
+            + GRID_SUBTITLE_LINE_HEIGHT * GRID_LABEL_LINES_F32;
+
+        Self {
+            columns,
+            cell_width,
+            thumb_size,
+            row_height,
+        }
+    }
+}
+
+fn columns_for_width(content_width: f32) -> usize {
+    let mut columns = 1_usize;
+    while columns < 512 {
+        let next = columns.saturating_add(1);
+        let cell = cell_width_for(content_width, next);
+        if cell < GRID_MIN_CELL_WIDTH {
+            break;
+        }
+        columns = next;
+    }
+    columns.max(1)
+}
+
+fn cell_width_for(content_width: f32, columns: usize) -> f32 {
+    let gaps = usize_to_f32(columns.saturating_sub(1));
+    let cols = usize_to_f32(columns);
+    (content_width - GRID_GAP.mul_add(gaps, 0.)) / cols
+}
+
+#[allow(
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn usize_to_f32(value: usize) -> f32 {
+    u32::try_from(value).map_or(u32::MAX, |value| value) as f32
+}
 
 #[derive(Clone, Debug)]
 pub struct GridItem {
@@ -52,7 +118,7 @@ pub fn page_shell(title: &'static str, body: impl IntoElement) -> impl IntoEleme
                 .font_semibold()
                 .child(title),
         )
-        .child(div().flex_1().min_h_0().px_6().pb_6().child(body))
+        .child(div().flex_1().min_h_0().min_w_0().overflow_hidden().px_6().pb_6().child(body))
 }
 
 pub fn empty_state(message: &'static str, cx: &gpui::App) -> impl IntoElement {
@@ -117,9 +183,7 @@ pub fn artist_thumbnail_path(
     store
         .albums()
         .values()
-        .find(|album| {
-            album.artwork_id.is_some() && album_includes_artist(album, artist_id)
-        })
+        .find(|album| album.artwork_id.is_some() && album_includes_artist(album, artist_id))
         .and_then(|album| album_thumbnail_path(store, album.artwork_id))
 }
 
@@ -130,12 +194,10 @@ pub fn collect_album_items(cx: &gpui::App) -> Vec<GridItem> {
 
     let mut albums: Vec<&Album> = store.albums().values().collect();
     albums.sort_by(|left, right| {
-        left.title
-            .cmp(&right.title)
-            .then_with(|| {
-                format_album_artists(artists, &left.album_artists)
-                    .cmp(&format_album_artists(artists, &right.album_artists))
-            })
+        left.title.cmp(&right.title).then_with(|| {
+            format_album_artists(artists, &left.album_artists)
+                .cmp(&format_album_artists(artists, &right.album_artists))
+        })
     });
 
     albums
@@ -200,23 +262,24 @@ pub fn media_card(
     grid_id: &'static str,
     row_ix: usize,
     col_ix: usize,
+    layout: GridLayout,
     item: &GridItem,
     cx: &gpui::App,
 ) -> impl IntoElement {
     let theme = cx.theme();
     let cell_ix = row_ix
-        .saturating_mul(GRID_COLUMNS)
+        .saturating_mul(layout.columns)
         .saturating_add(col_ix);
 
     v_flex()
-        .w(px(CARD_WIDTH))
+        .w(px(layout.cell_width))
         .flex_shrink_0()
         .gap(px(GRID_CARD_GAP))
         .child(
             div()
                 .id((grid_id, cell_ix))
-                .w(px(THUMB_SIZE))
-                .h(px(THUMB_SIZE))
+                .w(px(layout.thumb_size))
+                .h(px(layout.thumb_size))
                 .rounded(theme.radius)
                 .overflow_hidden()
                 .bg(theme.muted)
@@ -307,4 +370,36 @@ fn thumbnail_content(path: Option<&Path>, cx: &gpui::App) -> AnyElement {
                 .into_any_element()
         },
     )
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    fn row_width_for(layout: GridLayout) -> f32 {
+        let gaps = usize_to_f32(layout.columns.saturating_sub(1));
+        layout
+            .cell_width
+            .mul_add(usize_to_f32(layout.columns), GRID_GAP.mul_add(gaps, 0.))
+    }
+
+    #[test]
+    fn fills_wide_containers() {
+        let layout = GridLayout::for_content_width(900.);
+        assert_eq!(layout.columns, 5);
+        assert!((layout.cell_width - 167.2).abs() < 0.1);
+    }
+
+    #[test]
+    fn adds_columns_in_narrow_containers() {
+        let layout = GridLayout::for_content_width(480.);
+        assert_eq!(layout.columns, 3);
+    }
+
+    #[test]
+    fn never_exceeds_available_row_width() {
+        let content_width = 640.;
+        let layout = GridLayout::for_content_width(content_width);
+        assert!(row_width_for(layout) <= content_width + 0.5);
+    }
 }

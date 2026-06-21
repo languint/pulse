@@ -1,0 +1,12 @@
+[package]
+name = "pulse-runtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+gpui.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

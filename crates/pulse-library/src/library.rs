@@ -1,15 +1,13 @@
-use std::path::PathBuf;
-
-use tracing::info;
+use std::{path::PathBuf, time::Instant};
 
 use crate::{
+    ArtworkCache,
     config::LibraryConfig,
     error::LibraryError,
     roots::{resolve_roots, resolve_roots_or_error},
     scan::{ScanSummary, scan_roots},
     store::LibraryStore,
     watch::LibraryWatcher,
-    ArtworkCache,
 };
 
 pub struct MusicLibrary {
@@ -60,14 +58,52 @@ impl MusicLibrary {
     /// Returns [`LibraryError::RootMissing`] when a configured root path does not exist.
     pub fn scan(&mut self) -> Result<ScanSummary, LibraryError> {
         self.roots = resolve_roots_or_error(&self.config)?;
+        self.preload_artwork_from_disk()?;
+
+        let start = Instant::now();
         let summary = scan_roots(&mut self.store, &self.roots, &self.artwork_cache);
-        info!(
-            roots = self.roots.len(),
-            songs = summary.songs_imported,
-            skipped = summary.skipped,
-            "music library scan complete"
-        );
+        let duration = start.elapsed();
+
+        tracing::info!("scan completed in {}ms", duration.as_millis());
+
         Ok(summary)
+    }
+
+    fn preload_artwork_from_disk(&mut self) -> Result<(), LibraryError> {
+        let root = self.artwork_cache.root().join("thumbnails");
+        let entries = match std::fs::read_dir(&root) {
+            Ok(entries) => entries,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(source) => {
+                return Err(LibraryError::Io {
+                    path: root,
+                    source,
+                });
+            }
+        };
+
+        for entry in entries.filter_map(Result::ok) {
+            if !entry.file_type().is_ok_and(|file_type| file_type.is_dir()) {
+                continue;
+            }
+
+            let hash = entry.file_name().to_string_lossy().into_owned();
+            let Some(meta) = self
+                .artwork_cache
+                .cached_artwork(&hash)
+                .map_err(|source| LibraryError::Io {
+                    path: self.artwork_cache.meta_path_for(&hash),
+                    source,
+                })?
+            else {
+                continue;
+            };
+
+            self.store
+                .preload_artwork(&self.artwork_cache, &hash, &meta);
+        }
+
+        Ok(())
     }
 
     /// Watch library roots for filesystem changes and invoke `on_rescan` after debouncing.
@@ -88,7 +124,7 @@ impl MusicLibrary {
         let watcher = LibraryWatcher::new(&self.roots, self.config.watch_debounce(), on_rescan)?;
 
         self.watcher = Some(watcher);
-        info!(
+        tracing::info!(
             roots = self.roots.len(),
             "library filesystem watcher started"
         );

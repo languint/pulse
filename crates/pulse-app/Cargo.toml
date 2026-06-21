@@ -23,6 +23,7 @@ pulse-data = { path = "../pulse-data" }
 pulse-audio = { path = "../pulse-audio" }
 pulse-library = { path = "../pulse-library" }
 pulse-keymap = { path = "../pulse-keymap" }
+pulse-runtime = { path = "../pulse-runtime" }
 
 [lints]
 workspace = true

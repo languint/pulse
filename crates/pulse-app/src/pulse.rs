@@ -26,6 +26,11 @@ pub fn apply_theme(cx: &mut App, theme_name: &str) {
     }
 }
 
+/// Resolves platform data directories and creates them if needed.
+///
+/// # Errors
+///
+/// Returns [`pulse_data::DataError`] when a directory cannot be created.
 pub fn load_paths() -> Result<PulsePaths, pulse_data::DataError> {
     let paths = PulsePaths::platform_default();
     paths.ensure_all()?;
