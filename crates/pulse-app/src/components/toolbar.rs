@@ -1,6 +1,4 @@
-use gpui::{
-    Context, Entity, InteractiveElement, MouseButton, ParentElement, Render, Styled, Window, div,
-};
+use gpui::{Context, Entity, InteractiveElement, MouseButton, ParentElement, Render, Styled, Window, div};
 use gpui_component::{TitleBar, menu::AppMenuBar};
 
 pub mod menus;

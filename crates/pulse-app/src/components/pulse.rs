@@ -7,6 +7,7 @@ use gpui_component::{ActiveTheme, Root, TITLE_BAR_HEIGHT};
 use crate::{
     actions::{ManageLibraryRoots, ToggleFullscreen},
     components::{
+        breadcrumb::page_breadcrumb,
         library_roots_dialog::open_library_roots_dialog,
         navigation::PulsePage,
         pages::{AlbumViewerPage, AlbumsPage, ArtistViewerPage, ArtistsPage},
@@ -129,6 +130,7 @@ impl Render for Pulse {
         let foreground = theme.foreground;
         let font_size = theme.font_size;
         let dialog_layer = Root::render_dialog_layer(window, cx);
+        let pulse = cx.entity();
 
         let main_page = match self.page {
             PulsePage::Albums => self.albums_page.clone().into_any_element(),
@@ -165,9 +167,26 @@ impl Render for Pulse {
                             .flex_1()
                             .min_w_0()
                             .min_h_0()
+                            .flex()
+                            .flex_col()
                             .overflow_hidden()
                             .bg(background)
-                            .child(main_page),
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .px_6()
+                                    .pt_4()
+                                    .pb_2()
+                                    .child(page_breadcrumb(self.page, &pulse, cx)),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_h_0()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .child(main_page),
+                            ),
                     ),
             )
             .child(self.player_bar.clone())

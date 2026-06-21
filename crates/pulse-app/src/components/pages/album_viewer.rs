@@ -24,7 +24,7 @@ use crate::player::PulsePlayer;
 use super::common::{
     AlbumArtistEntry, AlbumDisplay, CatalogFingerprint, TrackRow, album_label_is_taken,
     catalog_fingerprint, collect_suggested_labels, empty_state, filter_tag_suggestions,
-    format_album_duration_ms, overrides_generation, page_back_label, resolve_album_display,
+    format_album_duration_ms, overrides_generation, resolve_album_display,
 };
 
 const SIDEBAR_WIDTH: f32 = 255.;
@@ -347,7 +347,6 @@ impl Render for AlbumViewerPage {
             return empty_state("Album not found.", cx).into_any_element();
         };
 
-        let pulse = self.pulse.clone();
         let item_sizes = self.item_sizes.clone();
         let entity = cx.entity();
         let tag_input = self.ensure_tag_input(window, cx);
@@ -387,7 +386,6 @@ impl Render for AlbumViewerPage {
             .size_full()
             .flex()
             .flex_col()
-            .child(h_flex_back_button(pulse, cx))
             .child(match layout.mode {
                 AlbumDetailLayoutMode::Sidebar => div()
                     .flex_1()
@@ -407,24 +405,6 @@ impl Render for AlbumViewerPage {
             })
             .into_any_element()
     }
-}
-
-fn h_flex_back_button(pulse: Entity<Pulse>, cx: &gpui::App) -> impl IntoElement {
-    use gpui_component::h_flex;
-
-    let back_label = page_back_label(cx, pulse.read(cx).back_target());
-
-    h_flex().items_center().gap_2().px_6().pt_6().pb_4().child(
-        Button::new("album-back")
-            .icon(IconName::ArrowLeft)
-            .label(back_label)
-            .outline()
-            .on_click(move |_, _, cx| {
-                pulse.update(cx, |pulse, cx| {
-                    pulse.go_back(cx);
-                });
-            }),
-    )
 }
 
 fn album_stats_line(display: &AlbumDisplay) -> Option<String> {

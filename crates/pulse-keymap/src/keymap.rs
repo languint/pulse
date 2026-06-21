@@ -59,6 +59,7 @@ fn default_bindings() -> HashMap<KeymapAction, Vec<String>> {
         (
             KeymapAction::MediaPlayPause,
             vec![
+                "space".into(),
                 "mediaplaypause".into(),
                 "xf86audioplay".into(),
                 "xf86audiopause".into(),
@@ -66,11 +67,11 @@ fn default_bindings() -> HashMap<KeymapAction, Vec<String>> {
         ),
         (
             KeymapAction::MediaNextTrack,
-            vec!["medianexttrack".into(), "xf86audionext".into()],
+            vec!["]".into(), "medianexttrack".into(), "xf86audionext".into()],
         ),
         (
             KeymapAction::MediaPreviousTrack,
-            vec!["mediaprevtrack".into(), "xf86audioprev".into()],
+            vec!["[".into(), "mediaprevtrack".into(), "xf86audioprev".into()],
         ),
     ])
 }
@@ -86,6 +87,37 @@ fn default_quit_keystrokes() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_media_keyboard_bindings() {
+        let keymap = PulseKeymap::default();
+
+        assert_eq!(
+            keymap.keystrokes_for(KeymapAction::MediaPlayPause),
+            &[
+                "space".to_string(),
+                "mediaplaypause".to_string(),
+                "xf86audioplay".to_string(),
+                "xf86audiopause".to_string(),
+            ]
+        );
+        assert_eq!(
+            keymap.keystrokes_for(KeymapAction::MediaNextTrack),
+            &[
+                "]".to_string(),
+                "medianexttrack".to_string(),
+                "xf86audionext".to_string(),
+            ]
+        );
+        assert_eq!(
+            keymap.keystrokes_for(KeymapAction::MediaPreviousTrack),
+            &[
+                "[".to_string(),
+                "mediaprevtrack".to_string(),
+                "xf86audioprev".to_string(),
+            ]
+        );
+    }
 
     #[test]
     fn default_quit_uses_ctrl_q_on_non_macos() {

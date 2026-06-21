@@ -51,12 +51,34 @@ impl PulsePage {
             Self::Artists | Self::ArtistDetail(_) => Self::Artists,
         }
     }
+
+    #[must_use]
+    pub fn breadcrumb_trail(self) -> Vec<Self> {
+        match self {
+            Self::Albums => vec![Self::Albums],
+            Self::Artists => vec![Self::Artists],
+            Self::AlbumDetail(id) => vec![Self::Albums, Self::AlbumDetail(id)],
+            Self::ArtistDetail(id) => vec![Self::Artists, Self::ArtistDetail(id)],
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use pulse_model::{AlbumId, ArtistId};
+
+    #[test]
+    fn breadcrumb_trail_includes_section_and_detail() {
+        assert_eq!(
+            PulsePage::AlbumDetail(AlbumId(1)).breadcrumb_trail(),
+            vec![PulsePage::Albums, PulsePage::AlbumDetail(AlbumId(1))]
+        );
+        assert_eq!(
+            PulsePage::ArtistDetail(ArtistId(2)).breadcrumb_trail(),
+            vec![PulsePage::Artists, PulsePage::ArtistDetail(ArtistId(2))]
+        );
+    }
 
     #[test]
     fn section_fallback_returns_list_page_for_detail_views() {

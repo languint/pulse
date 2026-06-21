@@ -1,3 +1,4 @@
+pub mod breadcrumb;
 pub mod library_roots_dialog;
 pub mod navigation;
 pub mod pages;
