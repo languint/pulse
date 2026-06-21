@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/pulse-app",
     "crates/pulse-audio",
+    "crates/pulse-data",
     "crates/pulse-keymap",
     "crates/pulse-library",
     "crates/pulse-model"

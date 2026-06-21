@@ -9,23 +9,26 @@ use crate::{
     scan::{ScanSummary, scan_roots},
     store::LibraryStore,
     watch::LibraryWatcher,
+    ArtworkCache,
 };
 
 pub struct MusicLibrary {
     config: LibraryConfig,
     roots: Vec<PathBuf>,
     store: LibraryStore,
+    artwork_cache: ArtworkCache,
     watcher: Option<LibraryWatcher>,
 }
 
 impl MusicLibrary {
     #[must_use]
-    pub fn new(config: LibraryConfig) -> Self {
+    pub fn new(config: LibraryConfig, artwork_cache_dir: impl Into<PathBuf>) -> Self {
         let roots = resolve_roots(&config);
         Self {
             config,
             roots,
             store: LibraryStore::default(),
+            artwork_cache: ArtworkCache::new(artwork_cache_dir),
             watcher: None,
         }
     }
@@ -45,9 +48,19 @@ impl MusicLibrary {
         &self.store
     }
 
+    #[must_use]
+    pub const fn artwork_cache(&self) -> &ArtworkCache {
+        &self.artwork_cache
+    }
+
+    /// Rescan configured library roots and rebuild the in-memory index.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LibraryError::RootMissing`] when a configured root path does not exist.
     pub fn scan(&mut self) -> Result<ScanSummary, LibraryError> {
         self.roots = resolve_roots_or_error(&self.config)?;
-        let summary = scan_roots(&mut self.store, &self.roots);
+        let summary = scan_roots(&mut self.store, &self.roots, &self.artwork_cache);
         info!(
             roots = self.roots.len(),
             songs = summary.songs_imported,
@@ -57,6 +70,11 @@ impl MusicLibrary {
         Ok(summary)
     }
 
+    /// Watch library roots for filesystem changes and invoke `on_rescan` after debouncing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LibraryError::RootMissing`] or a watcher error when setup fails.
     pub fn start_watching(
         &mut self,
         on_rescan: impl FnMut() + Send + 'static,
@@ -81,6 +99,12 @@ impl MusicLibrary {
         self.watcher = None;
     }
 
+    /// Replace library configuration and optionally trigger a rescan.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LibraryError::RootMissing`] when a configured root path does not exist,
+    /// or a scan error when `rescan` is true.
     pub fn set_config(&mut self, config: LibraryConfig, rescan: bool) -> Result<(), LibraryError> {
         self.config = config;
         self.roots = resolve_roots_or_error(&self.config)?;
@@ -96,7 +120,7 @@ impl MusicLibrary {
 
 impl Default for MusicLibrary {
     fn default() -> Self {
-        Self::new(LibraryConfig::default())
+        Self::new(LibraryConfig::default(), ArtworkCache::default_dir())
     }
 }
 
@@ -113,11 +137,15 @@ mod tests {
             ..LibraryConfig::default()
         };
 
-        let mut library = MusicLibrary::new(config);
+        let mut library = MusicLibrary::new(config, temp.path());
         let summary = library.scan()?;
 
-        assert_eq!(summary.files_seen, 0);
-        assert!(library.store().songs().is_empty());
+        if summary.files_seen != 0 {
+            return Err("expected no files seen".into());
+        }
+        if !library.store().songs().is_empty() {
+            return Err("expected empty song store".into());
+        }
         Ok(())
     }
 }

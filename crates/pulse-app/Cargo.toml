@@ -19,6 +19,7 @@ rfd = { version = "0.15", default-features = true }
 tracing-subscriber = "0.3"
 
 pulse-model = { path = "../pulse-model" }
+pulse-data = { path = "../pulse-data" }
 pulse-audio = { path = "../pulse-audio" }
 pulse-library = { path = "../pulse-library" }
 pulse-keymap = { path = "../pulse-keymap" }

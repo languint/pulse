@@ -32,12 +32,12 @@ pub struct LibraryRootsEditor {
 }
 
 impl LibraryRootsEditor {
-    fn new(config: LibraryConfig) -> Self {
+    const fn new(config: LibraryConfig) -> Self {
         Self { config }
     }
 
     #[must_use]
-    pub fn config(&self) -> &LibraryConfig {
+    pub const fn config(&self) -> &LibraryConfig {
         &self.config
     }
 
@@ -107,7 +107,7 @@ impl LibraryRootsEditor {
         cx.notify();
     }
 
-    fn pick_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn pick_folder(window: &Window, cx: &Context<Self>) {
         let dialog = rfd::AsyncFileDialog::new()
             .set_title("Select music folder")
             .set_parent(window)
@@ -198,8 +198,8 @@ impl Render for LibraryRootsEditor {
                     Button::new("add-root")
                         .outline()
                         .label("Add Folder…")
-                        .on_click(cx.listener(|editor, _, window, cx| {
-                            editor.pick_folder(window, cx);
+                        .on_click(cx.listener(|_, _, window, cx| {
+                            Self::pick_folder(window, cx);
                         })),
                 ),
             )
@@ -211,14 +211,11 @@ pub fn open_library_roots_dialog(window: &mut Window, cx: &mut App) {
 
     let editor = cx.new(|_| LibraryRootsEditor::new(initial_config));
 
-    let editor_body = editor.clone();
-    let editor_apply = editor.clone();
-
     window.open_dialog(cx, move |dialog, _, _| {
-        let editor_apply = editor_apply.clone();
+        let editor_apply = editor.clone();
         dialog
             .w(px(560.))
-            .child(editor_body.clone())
+            .child(editor.clone())
             .footer(
                 DialogFooter::new()
                     .gap_2()
@@ -230,8 +227,7 @@ pub fn open_library_roots_dialog(window: &mut Window, cx: &mut App) {
                                 window.close_dialog(cx);
                             }),
                     )
-                    .child({
-                        let editor_apply = editor_apply.clone();
+                    .child(
                         Button::new("apply-roots")
                             .label("Apply & Rescan")
                             .primary()
@@ -239,8 +235,8 @@ pub fn open_library_roots_dialog(window: &mut Window, cx: &mut App) {
                                 let config = editor_apply.read(cx).config().clone();
                                 PulseLibrary::apply_config(cx, config);
                                 window.close_dialog(cx);
-                            })
-                    }),
+                            }),
+                    ),
             )
     });
 }
@@ -252,13 +248,13 @@ fn display_path(path: &Path) -> String {
 }
 
 fn strip_verbatim_prefix(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
-        format!(r"\\{rest}")
-    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
-        rest.to_string()
-    } else {
-        path.to_string()
-    }
+    path.strip_prefix(r"\\?\UNC\").map_or_else(
+        || {
+            path.strip_prefix(r"\\?\")
+                .map_or_else(|| path.to_string(), std::string::ToString::to_string)
+        },
+        |rest| format!(r"\\{rest}"),
+    )
 }
 
 fn paths_equal(a: &Path, b: &Path) -> bool {

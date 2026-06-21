@@ -35,7 +35,7 @@ pub struct ArtworkThumbnail {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ThumbnailSize {
     /// 64x64 pixels
     Small,
@@ -43,4 +43,20 @@ pub enum ThumbnailSize {
     Medium,
     /// 1024x1024 pixels
     Large,
+}
+
+impl ThumbnailSize {
+    #[must_use]
+    pub const fn pixels(self) -> u32 {
+        match self {
+            Self::Small => 64,
+            Self::Medium => 256,
+            Self::Large => 1024,
+        }
+    }
+
+    #[must_use]
+    pub const fn all() -> [Self; 3] {
+        [Self::Small, Self::Medium, Self::Large]
+    }
 }

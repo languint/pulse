@@ -1,23 +1,25 @@
-use std::thread;
+use std::path::PathBuf;
 
-use gpui::{App, Global, UpdateGlobal};
-use pulse_library::{LibraryConfig, LibraryError, MusicLibrary, ScanSummary};
+use gpui::{App, UpdateGlobal};
+use pulse_library::{LibraryConfig, MusicLibrary, ScanSummary};
+use crate::data::DataPaths;
 use tracing::{error, info, warn};
 
 use crate::config::PulseConfig;
+use crate::data::persist_settings;
 
 pub struct PulseLibrary(MusicLibrary);
 
 impl PulseLibrary {
     #[must_use]
-    pub fn new(config: LibraryConfig) -> Self {
-        Self(MusicLibrary::new(config))
+    pub fn new(config: LibraryConfig, artwork_cache_dir: PathBuf) -> Self {
+        Self(MusicLibrary::new(config, artwork_cache_dir))
     }
 
-    pub fn init(cx: &mut App, config: LibraryConfig) {
-        let roots: Vec<_> = MusicLibrary::new(config.clone()).roots().to_vec();
+    pub fn init(cx: &mut App, config: LibraryConfig, artwork_cache_dir: PathBuf) {
+        let roots: Vec<_> = pulse_library::resolve_roots(&config);
 
-        Self::set_global(cx, Self::new(config.clone()));
+        Self::set_global(cx, Self::new(config.clone(), artwork_cache_dir));
 
         info!(roots = roots.len(), ?roots, "initializing music library");
 
@@ -25,24 +27,33 @@ impl PulseLibrary {
     }
 
     pub fn apply_config(cx: &mut App, config: LibraryConfig) {
+        let paths = cx.global::<DataPaths>().clone();
+
         PulseConfig::update_global(cx, |pulse_config, _| {
             pulse_config.library = config.clone();
         });
 
-        Self::set_global(cx, Self::new(config.clone()));
+        if let Err(error) = persist_settings(&paths, &cx.global::<PulseConfig>().to_settings()) {
+            error!(%error, "failed to save library settings");
+        }
+
+        let artwork_cache_dir = paths.artwork_cache_dir();
+        Self::set_global(cx, Self::new(config.clone(), artwork_cache_dir));
 
         info!(?config, "updating music library roots");
 
         Self::spawn_scan(cx, config);
     }
 
-    fn spawn_scan(cx: &mut App, config: LibraryConfig) {
+    fn spawn_scan(cx: &App, config: LibraryConfig) {
+        let artwork_cache_dir = cx.global::<DataPaths>().artwork_cache_dir();
+
         cx.spawn(async move |cx| {
             let scanned = cx
                 .background_executor()
                 .spawn(async move {
-                    thread::spawn(move || {
-                        let mut library = MusicLibrary::new(config);
+                    std::thread::spawn(move || {
+                        let mut library = MusicLibrary::new(config, artwork_cache_dir);
                         let result = library.scan();
                         (library, result)
                     })
@@ -62,6 +73,7 @@ impl PulseLibrary {
                     Ok(summary) => log_scan_complete(&summary),
                     Err(error) => log_scan_error(&error),
                 }
+                app.refresh_windows();
             });
         })
         .detach();
@@ -78,7 +90,7 @@ impl PulseLibrary {
     }
 }
 
-impl Global for PulseLibrary {}
+impl gpui::Global for PulseLibrary {}
 
 fn log_scan_complete(summary: &ScanSummary) {
     info!(
@@ -90,8 +102,8 @@ fn log_scan_complete(summary: &ScanSummary) {
     );
 }
 
-fn log_scan_error(error: &LibraryError) {
-    if let LibraryError::RootMissing(path) = error {
+fn log_scan_error(error: &pulse_library::LibraryError) {
+    if let pulse_library::LibraryError::RootMissing(path) = error {
         warn!(?path, "music library root is missing; skipping scan");
     } else {
         error!(%error, "music library scan failed");

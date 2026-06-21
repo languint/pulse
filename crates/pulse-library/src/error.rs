@@ -22,6 +22,12 @@ pub enum LibraryError {
         source: lofty::error::LoftyError,
     },
 
+    #[error("failed to decode artwork image: {source}")]
+    ArtworkDecode { source: image::ImageError },
+
+    #[error("failed to encode artwork thumbnail: {source}")]
+    ArtworkEncode { source: image::ImageError },
+
     #[error("io error at {path}: {source}")]
     Io {
         path: PathBuf,

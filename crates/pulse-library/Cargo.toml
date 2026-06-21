@@ -11,6 +11,8 @@ lofty = "0.22"
 notify = "8.2"
 notify-debouncer-mini = "0.6"
 walkdir = "2"
+blake3 = "1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true

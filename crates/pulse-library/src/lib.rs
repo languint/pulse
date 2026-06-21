@@ -1,3 +1,4 @@
+mod artwork;
 mod config;
 mod error;
 mod library;
@@ -6,6 +7,7 @@ mod scan;
 mod store;
 mod watch;
 
+pub use artwork::ArtworkCache;
 pub use config::LibraryConfig;
 pub use error::LibraryError;
 pub use library::MusicLibrary;

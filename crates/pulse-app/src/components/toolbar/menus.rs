@@ -5,15 +5,15 @@ use crate::actions::{ManageLibraryRoots, Quit, ToggleFullscreen};
 
 pub fn init(cx: &mut App) -> Entity<AppMenuBar> {
     let app_menu_bar = AppMenuBar::new(cx);
-    update_app_menu(app_menu_bar.clone(), cx);
+    update_app_menu(&app_menu_bar, cx);
     app_menu_bar
 }
 
-fn update_app_menu(app_menu_bar: Entity<AppMenuBar>, cx: &mut App) {
+fn update_app_menu(app_menu_bar: &Entity<AppMenuBar>, cx: &mut App) {
     cx.set_menus(build_menus());
     let menus = build_menus()
         .into_iter()
-        .map(|menu| menu.owned())
+        .map(gpui::Menu::owned)
         .collect();
     GlobalState::global_mut(cx).set_app_menus(menus);
 

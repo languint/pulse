@@ -250,7 +250,7 @@ mod render_tests {
     use super::*;
 
     #[gpui::test]
-    async fn horizontal_stack_draws(cx: &mut gpui::TestAppContext) {
+    fn horizontal_stack_draws(cx: &mut gpui::TestAppContext) {
         let cx = cx.add_empty_window();
 
         cx.draw(
@@ -267,7 +267,7 @@ mod render_tests {
     }
 
     #[gpui::test]
-    async fn vertical_stack_draws(cx: &mut gpui::TestAppContext) {
+    fn vertical_stack_draws(cx: &mut gpui::TestAppContext) {
         let cx = cx.add_empty_window();
 
         cx.draw(
@@ -284,7 +284,7 @@ mod render_tests {
     }
 
     #[gpui::test]
-    async fn stack_accepts_styling(cx: &mut gpui::TestAppContext) {
+    fn stack_accepts_styling(cx: &mut gpui::TestAppContext) {
         let cx = cx.add_empty_window();
 
         cx.draw(

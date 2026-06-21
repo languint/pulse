@@ -3,30 +3,38 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use pulse_model::{Album, AlbumArtists, AlbumId, Artist, ArtistId, EntityMetadata, Song, SongId};
+use pulse_model::{
+    Album, AlbumArtists, AlbumId, Artist, ArtistId, Artwork, ArtworkId, ArtworkReference,
+    ArtworkThumbnail, EntityMetadata, Song, SongId, ThumbnailSize,
+};
 
 #[derive(Debug, Default)]
 struct IdGenerator {
     song: u64,
     album: u64,
     artist: u64,
+    artwork: u64,
 }
 
-#[allow(clippy::missing_const_for_fn)]
 impl IdGenerator {
-    fn allocate_song(&mut self) -> SongId {
+    const fn allocate_song(&mut self) -> SongId {
         self.song = self.song.saturating_add(1);
         SongId(self.song)
     }
 
-    fn allocate_album(&mut self) -> AlbumId {
+    const fn allocate_album(&mut self) -> AlbumId {
         self.album = self.album.saturating_add(1);
         AlbumId(self.album)
     }
 
-    fn allocate_artist(&mut self) -> ArtistId {
+    const fn allocate_artist(&mut self) -> ArtistId {
         self.artist = self.artist.saturating_add(1);
         ArtistId(self.artist)
+    }
+
+    const fn allocate_artwork(&mut self) -> ArtworkId {
+        self.artwork = self.artwork.saturating_add(1);
+        ArtworkId(self.artwork)
     }
 }
 
@@ -35,6 +43,9 @@ pub struct LibraryStore {
     songs: HashMap<SongId, Song>,
     albums: HashMap<AlbumId, Album>,
     artists: HashMap<ArtistId, Artist>,
+    artworks: HashMap<ArtworkId, Artwork>,
+    artwork_by_hash: HashMap<String, ArtworkId>,
+    thumbnails: HashMap<(ArtworkId, ThumbnailSize), PathBuf>,
     song_by_path: HashMap<PathBuf, SongId>,
     ids: IdGenerator,
 }
@@ -56,6 +67,28 @@ impl LibraryStore {
     }
 
     #[must_use]
+    pub const fn artworks(&self) -> &HashMap<ArtworkId, Artwork> {
+        &self.artworks
+    }
+
+    #[must_use]
+    pub fn artwork(&self, id: ArtworkId) -> Option<&Artwork> {
+        self.artworks.get(&id)
+    }
+
+    #[must_use]
+    pub fn thumbnail_path(&self, artwork_id: ArtworkId, size: ThumbnailSize) -> Option<&Path> {
+        self.thumbnails
+            .get(&(artwork_id, size))
+            .map(PathBuf::as_path)
+    }
+
+    #[must_use]
+    pub fn artwork_id_for_hash(&self, content_hash: &str) -> Option<ArtworkId> {
+        self.artwork_by_hash.get(content_hash).copied()
+    }
+
+    #[must_use]
     pub fn song_for_path(&self, path: &Path) -> Option<&Song> {
         self.song_by_path
             .get(path)
@@ -66,6 +99,9 @@ impl LibraryStore {
         self.songs.clear();
         self.albums.clear();
         self.artists.clear();
+        self.artworks.clear();
+        self.artwork_by_hash.clear();
+        self.thumbnails.clear();
         self.song_by_path.clear();
         self.ids = IdGenerator::default();
     }
@@ -128,8 +164,55 @@ impl LibraryStore {
         self.songs.insert(song.id, song);
     }
 
-    pub fn next_song_id(&mut self) -> SongId {
+    pub const fn next_song_id(&mut self) -> SongId {
         self.ids.allocate_song()
+    }
+
+    pub(crate) fn insert_artwork(&mut self, mut artwork: Artwork, content_hash: &str) -> ArtworkId {
+        let id = self.ids.allocate_artwork();
+        artwork.id = id;
+        self.artwork_by_hash.insert(content_hash.to_string(), id);
+        self.artworks.insert(id, artwork);
+        id
+    }
+
+    pub(crate) fn insert_thumbnail(
+        &mut self,
+        artwork_id: ArtworkId,
+        size: ThumbnailSize,
+        path: PathBuf,
+    ) {
+        self.thumbnails.insert((artwork_id, size), path);
+    }
+
+    pub(crate) fn link_song_artwork(&mut self, song_id: SongId, artwork_id: ArtworkId) {
+        let Some(song) = self.songs.get_mut(&song_id) else {
+            return;
+        };
+
+        song.artwork = Some(ArtworkReference::Custom(artwork_id));
+
+        if let Some(album_id) = song.album_id
+            && let Some(album) = self.albums.get_mut(&album_id)
+            && album.artwork_id.is_none()
+        {
+            album.artwork_id = Some(artwork_id);
+        }
+    }
+
+    #[must_use]
+    pub fn thumbnails_for(&self, artwork_id: ArtworkId) -> Vec<ArtworkThumbnail> {
+        ThumbnailSize::all()
+            .into_iter()
+            .filter_map(|size| {
+                self.thumbnail_path(artwork_id, size)
+                    .map(|path| ArtworkThumbnail {
+                        artwork_id,
+                        size,
+                        path: path.to_path_buf(),
+                    })
+            })
+            .collect()
     }
 }
 

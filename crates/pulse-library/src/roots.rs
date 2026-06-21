@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::{config::LibraryConfig, error::LibraryError};
 
+#[must_use]
 pub fn resolve_roots(config: &LibraryConfig) -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
@@ -66,8 +67,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deduplicates_extra_paths() {
-        let temp = tempfile::tempdir().expect("tempdir");
+    fn deduplicates_extra_paths() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
         let path = temp.path().to_path_buf();
 
         let config = LibraryConfig {
@@ -77,6 +78,9 @@ mod tests {
         };
 
         let roots = resolve_roots(&config);
-        assert_eq!(roots.len(), 1);
+        if roots.len() != 1 {
+            return Err("expected deduplicated root list".into());
+        }
+        Ok(())
     }
 }

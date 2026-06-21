@@ -10,7 +10,11 @@ use lofty::{
 };
 use pulse_model::{AlbumArtists, ArtworkReference, EntityMetadata, Song};
 
-use crate::{error::LibraryError, store::LibraryStore};
+use crate::{
+    artwork::{extract_cover_art, ingest_embedded_art, ArtworkCache},
+    error::LibraryError,
+    store::LibraryStore,
+};
 
 const AUDIO_EXTENSIONS: &[&str] = &[
     "mp3", "flac", "ogg", "oga", "opus", "m4a", "aac", "wav", "aiff", "aif", "wma", "mpc", "ape",
@@ -24,7 +28,11 @@ pub struct ScanSummary {
     pub skipped: usize,
 }
 
-pub fn scan_roots(store: &mut LibraryStore, roots: &[PathBuf]) -> ScanSummary {
+pub fn scan_roots(
+    store: &mut LibraryStore,
+    roots: &[PathBuf],
+    artwork_cache: &ArtworkCache,
+) -> ScanSummary {
     store.clear();
 
     let mut files_seen = 0_usize;
@@ -47,7 +55,7 @@ pub fn scan_roots(store: &mut LibraryStore, roots: &[PathBuf]) -> ScanSummary {
             }
 
             files_seen = files_seen.saturating_add(1);
-            match import_file(store, &path) {
+            match import_file(store, artwork_cache, &path) {
                 Ok(()) => songs_imported = songs_imported.saturating_add(1),
                 Err(error) => {
                     skipped = skipped.saturating_add(1);
@@ -67,7 +75,11 @@ pub fn scan_roots(store: &mut LibraryStore, roots: &[PathBuf]) -> ScanSummary {
     }
 }
 
-fn import_file(store: &mut LibraryStore, path: &Path) -> Result<(), LibraryError> {
+fn import_file(
+    store: &mut LibraryStore,
+    artwork_cache: &ArtworkCache,
+    path: &Path,
+) -> Result<(), LibraryError> {
     let tagged = Probe::open(path)
         .map_err(|source| LibraryError::Metadata {
             path: path.to_path_buf(),
@@ -120,8 +132,9 @@ fn import_file(store: &mut LibraryStore, path: &Path) -> Result<(), LibraryError
 
     let album_id = store.intern_album(&album_title, album_artists, year);
 
+    let song_id = store.next_song_id();
     let song = Song {
-        id: store.next_song_id(),
+        id: song_id,
         title,
         album_id: Some(album_id),
         track_artists: track_artist_ids,
@@ -134,6 +147,14 @@ fn import_file(store: &mut LibraryStore, path: &Path) -> Result<(), LibraryError
     };
 
     store.insert_song(song);
+
+    if let Some(tag) = tag
+        && let Some(cover_data) = extract_cover_art(tag)
+        && let Err(error) = ingest_embedded_art(store, artwork_cache, song_id, &cover_data)
+    {
+        tracing::warn!(?path, %error, "failed to cache embedded artwork");
+    }
+
     Ok(())
 }
 
