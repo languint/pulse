@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use crate::data::{DataOverrides, DataPaths};
 use gpui::{
-    AnyElement, InteractiveElement, IntoElement, ObjectFit, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder, px,
+    AnyElement, InteractiveElement, IntoElement, ObjectFit, ParentElement, Pixels, SharedString,
+    Size, StatefulInteractiveElement, Styled, StyledImage, Window, div, img, prelude::FluentBuilder,
+    px, size,
 };
 use gpui_component::{ActiveTheme, Icon, IconName, StyledExt as _, tooltip::Tooltip, v_flex};
 use pulse_data::{UserOverrides, album_override_key, artist_override_key};
-use pulse_model::{Album, AlbumArtists, Artist, ArtistId, ArtworkId, ThumbnailSize};
+use pulse_model::{Album, AlbumArtists, Artist, ArtistId, ArtworkId, Song, SongId, ThumbnailSize};
 
+use crate::artwork_prefetch;
 use crate::library::PulseLibrary;
 
 pub const GRID_MIN_CELL_WIDTH: f32 = 140.;
@@ -98,11 +101,59 @@ fn usize_to_f32(value: usize) -> f32 {
     u32::try_from(value).map_or(u32::MAX, |value| value) as f32
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CatalogFingerprint {
+    pub albums: usize,
+    pub songs: usize,
+    pub artists: usize,
+}
+
+#[must_use]
+pub fn catalog_fingerprint(cx: &gpui::App) -> CatalogFingerprint {
+    let store = cx.global::<PulseLibrary>().inner().store();
+    CatalogFingerprint {
+        albums: store.albums().len(),
+        songs: store.songs().len(),
+        artists: store.artists().len(),
+    }
+}
+
+#[must_use]
+pub fn grid_item_sizes(layout: GridLayout, item_count: usize) -> Rc<Vec<Size<Pixels>>> {
+    let row_count = item_count.div_ceil(layout.columns);
+    Rc::new(vec![size(px(0.), px(layout.row_height)); row_count])
+}
+
+#[derive(Clone, Debug)]
+pub struct AlbumDisplay {
+    pub album_id: pulse_model::AlbumId,
+    pub title: SharedString,
+    pub artists: SharedString,
+    pub year: Option<u16>,
+    pub duration_ms: u64,
+    pub artwork: Option<PathBuf>,
+    pub genres: Vec<String>,
+    pub tracks: Vec<TrackRow>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TrackRow {
+    pub id: SongId,
+    pub title: SharedString,
+    pub number_label: SharedString,
+    pub duration: SharedString,
+    pub disc_number: Option<u16>,
+    #[allow(dead_code)]
+    pub track_number: Option<u16>,
+}
+
 #[derive(Clone, Debug)]
 pub struct GridItem {
+    pub album_id: Option<pulse_model::AlbumId>,
     pub title: SharedString,
     pub subtitle: SharedString,
     pub thumbnail: Option<PathBuf>,
+    pub detail_artwork: Option<PathBuf>,
 }
 
 pub fn page_shell(title: &'static str, body: impl IntoElement) -> impl IntoElement {
@@ -118,7 +169,16 @@ pub fn page_shell(title: &'static str, body: impl IntoElement) -> impl IntoEleme
                 .font_semibold()
                 .child(title),
         )
-        .child(div().flex_1().min_h_0().min_w_0().overflow_hidden().px_6().pb_6().child(body))
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .min_w_0()
+                .overflow_hidden()
+                .px_6()
+                .pb_6()
+                .child(body),
+        )
 }
 
 pub fn empty_state(message: &'static str, cx: &gpui::App) -> impl IntoElement {
@@ -157,15 +217,31 @@ pub fn album_includes_artist(album: &Album, artist_id: ArtistId) -> bool {
     }
 }
 
+pub fn artwork_path(
+    store: &pulse_library::LibraryStore,
+    artwork_id: Option<ArtworkId>,
+    size: ThumbnailSize,
+) -> Option<PathBuf> {
+    artwork_id.and_then(|id| {
+        store
+            .thumbnail_path(id, size)
+            .map(std::path::Path::to_path_buf)
+    })
+}
+
 pub fn album_thumbnail_path(
     store: &pulse_library::LibraryStore,
     artwork_id: Option<ArtworkId>,
 ) -> Option<PathBuf> {
-    artwork_id.and_then(|id| {
-        store
-            .thumbnail_path(id, ThumbnailSize::Medium)
-            .map(std::path::Path::to_path_buf)
-    })
+    artwork_path(store, artwork_id, ThumbnailSize::Medium)
+}
+
+pub fn album_detail_artwork_path(
+    store: &pulse_library::LibraryStore,
+    artwork_id: Option<ArtworkId>,
+) -> Option<PathBuf> {
+    artwork_path(store, artwork_id, ThumbnailSize::Large)
+        .or_else(|| artwork_path(store, artwork_id, ThumbnailSize::Medium))
 }
 
 pub fn artist_thumbnail_path(
@@ -218,9 +294,11 @@ pub fn collect_album_items(cx: &gpui::App) -> Vec<GridItem> {
                 .or_else(|| album_thumbnail_path(store, album.artwork_id));
 
             GridItem {
+                album_id: Some(album.id),
                 title: title.to_string().into(),
                 subtitle: artist_label.into(),
                 thumbnail,
+                detail_artwork: album_detail_artwork_path(store, album.artwork_id),
             }
         })
         .collect()
@@ -250,28 +328,150 @@ pub fn collect_artist_items(cx: &gpui::App) -> Vec<GridItem> {
                 .or_else(|| artist_thumbnail_path(store, artist_id));
 
             Some(GridItem {
+                album_id: None,
                 title: title.to_string().into(),
                 subtitle: SharedString::default(),
                 thumbnail,
+                detail_artwork: None,
             })
         })
         .collect()
 }
 
-pub fn media_card(
-    grid_id: &'static str,
-    row_ix: usize,
-    col_ix: usize,
-    layout: GridLayout,
-    item: &GridItem,
-    cx: &gpui::App,
-) -> impl IntoElement {
-    let theme = cx.theme();
-    let cell_ix = row_ix
-        .saturating_mul(layout.columns)
-        .saturating_add(col_ix);
+pub fn format_duration_ms(duration_ms: u32) -> String {
+    let total_seconds = duration_ms / 1000;
+    let minutes = total_seconds / 60;
+    let seconds = total_seconds % 60;
+    format!("{minutes}:{seconds:02}")
+}
 
-    v_flex()
+#[must_use]
+pub fn format_album_duration_ms(total_ms: u64) -> String {
+    let total_seconds = total_ms / 1000;
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+
+    if hours > 0 {
+        if minutes > 0 {
+            format!("{hours} hr {minutes} min")
+        } else {
+            format!("{hours} hr")
+        }
+    } else if minutes > 0 {
+        format!("{minutes} min")
+    } else {
+        let seconds = total_seconds % 60;
+        format!("{seconds} sec")
+    }
+}
+
+pub fn resolve_album_display(
+    cx: &gpui::App,
+    album_id: pulse_model::AlbumId,
+) -> Option<AlbumDisplay> {
+    use std::collections::BTreeSet;
+
+    let library = cx.global::<PulseLibrary>().inner();
+    let store = library.store();
+    let album = store.albums().get(&album_id)?;
+    let artists = store.artists();
+
+    let artist_label = format_album_artists(artists, &album.album_artists);
+    let override_key = album_override_key(&album.title, &artist_label);
+    let user_override = cx.global::<DataOverrides>().album(&override_key);
+    let paths = cx.global::<DataPaths>();
+
+    let title = user_override
+        .and_then(|entry| entry.title.as_deref())
+        .unwrap_or(&album.title);
+
+    let artwork = user_override
+        .and_then(|entry| entry.artwork.as_deref())
+        .and_then(|path| UserOverrides::resolve_artwork(paths, Some(path)))
+        .or_else(|| album_detail_artwork_path(store, album.artwork_id));
+
+    let mut songs: Vec<&Song> = store
+        .songs()
+        .values()
+        .filter(|song| song.album_id == Some(album_id))
+        .collect();
+    songs.sort_by(|left, right| compare_album_songs(left, right));
+
+    let mut genres: BTreeSet<String> = album.metadata.genres.iter().cloned().collect();
+    for song in &songs {
+        for genre in &song.metadata.genres {
+            genres.insert(genre.clone());
+        }
+    }
+
+    let total_duration_ms = songs
+        .iter()
+        .fold(0_u64, |total, song| total.saturating_add(u64::from(song.duration_ms)));
+
+    let tracks = songs
+        .into_iter()
+        .map(|song| track_row_from_song(song, store, artists))
+        .collect();
+
+    Some(AlbumDisplay {
+        album_id,
+        title: title.to_string().into(),
+        artists: artist_label.into(),
+        year: album.year,
+        duration_ms: total_duration_ms,
+        artwork,
+        genres: genres.into_iter().collect(),
+        tracks,
+    })
+}
+
+fn compare_album_songs(left: &Song, right: &Song) -> std::cmp::Ordering {
+    left.disc_number
+        .cmp(&right.disc_number)
+        .then_with(|| left.track_number.cmp(&right.track_number))
+        .then_with(|| left.title.cmp(&right.title))
+}
+
+fn track_row_from_song(
+    song: &Song,
+    _store: &pulse_library::LibraryStore,
+    _artists: &HashMap<ArtistId, Artist>,
+) -> TrackRow {
+    let number_label = song
+        .track_number
+        .map_or_else(|| "-".to_string(), |number| number.to_string());
+
+    TrackRow {
+        id: song.id,
+        title: song.title.clone().into(),
+        number_label: number_label.into(),
+        duration: format_duration_ms(song.duration_ms).into(),
+        disc_number: song.disc_number,
+        track_number: song.track_number,
+    }
+}
+
+pub struct MediaCardParams {
+    pub grid_id: &'static str,
+    pub row_ix: usize,
+    pub col_ix: usize,
+    pub layout: GridLayout,
+    pub items: std::sync::Arc<[GridItem]>,
+    pub on_album_open: Option<gpui::Entity<crate::components::pulse::Pulse>>,
+}
+
+pub fn media_card(item: &GridItem, params: MediaCardParams, cx: &gpui::App) -> impl IntoElement {
+    let theme = cx.theme();
+    let cell_ix = params
+        .row_ix
+        .saturating_mul(params.layout.columns)
+        .saturating_add(params.col_ix);
+    let layout = params.layout;
+    let items = params.items;
+    let grid_id = params.grid_id;
+    let on_album_open = params.on_album_open;
+
+    let card = v_flex()
         .w(px(layout.cell_width))
         .flex_shrink_0()
         .gap(px(GRID_CARD_GAP))
@@ -300,7 +500,29 @@ pub fn media_card(
                 GridLabelStyle::Subtitle,
                 cx,
             ))
+        });
+
+    let card_id = (grid_id, cell_ix);
+
+    let attach_hover = |element: gpui::Stateful<gpui::Div>, items: std::sync::Arc<[GridItem]>| {
+        element.on_hover(move |hovered, _, cx| {
+            if *hovered {
+                artwork_prefetch::prefetch_grid_neighbors(cx, cell_ix, &items, layout);
+            }
         })
+    };
+
+    if let (Some(pulse), Some(album_id)) = (on_album_open, item.album_id) {
+        attach_hover(div().id(card_id).cursor_pointer(), items)
+            .on_click(move |_, _, cx| {
+                pulse.update(cx, |pulse, cx| {
+                    pulse.open_album(album_id, cx);
+                });
+            })
+            .child(card)
+    } else {
+        attach_hover(div().id(card_id), items).child(card)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -401,5 +623,20 @@ mod layout_tests {
         let content_width = 640.;
         let layout = GridLayout::for_content_width(content_width);
         assert!(row_width_for(layout) <= content_width + 0.5);
+    }
+
+    #[test]
+    fn formats_album_duration_minutes() {
+        assert_eq!(format_album_duration_ms(2_520_000), "42 min");
+    }
+
+    #[test]
+    fn formats_album_duration_hours() {
+        assert_eq!(format_album_duration_ms(4_800_000), "1 hr 20 min");
+    }
+
+    #[test]
+    fn formats_album_duration_hours_only() {
+        assert_eq!(format_album_duration_ms(3_600_000), "1 hr");
     }
 }

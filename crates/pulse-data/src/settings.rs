@@ -5,12 +5,29 @@ use crate::{DataError, PulsePaths};
 pub const DEFAULT_THEME: &str = "Pulse Dark";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct InterfaceSettings {
+    #[serde(default = "default_aggressively_prefetch_artwork")]
+    pub aggressively_prefetch_artwork: bool,
+}
+
+impl Default for InterfaceSettings {
+    fn default() -> Self {
+        Self {
+            aggressively_prefetch_artwork: default_aggressively_prefetch_artwork(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PulseSettings {
     #[serde(default = "default_theme")]
     pub theme: String,
 
     #[serde(default)]
     pub library: LibraryConfig,
+
+    #[serde(default)]
+    pub interface: InterfaceSettings,
 }
 
 impl Default for PulseSettings {
@@ -18,6 +35,7 @@ impl Default for PulseSettings {
         Self {
             theme: default_theme(),
             library: LibraryConfig::default(),
+            interface: InterfaceSettings::default(),
         }
     }
 }
@@ -61,6 +79,10 @@ fn default_theme() -> String {
     DEFAULT_THEME.to_string()
 }
 
+const fn default_aggressively_prefetch_artwork() -> bool {
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,6 +97,9 @@ mod tests {
                 include_xdg_music_dir: false,
                 extra_paths: vec!["/music".into()],
                 watch_debounce_ms: 500,
+            },
+            interface: InterfaceSettings {
+                aggressively_prefetch_artwork: false,
             },
         };
 

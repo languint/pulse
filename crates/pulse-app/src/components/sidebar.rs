@@ -35,7 +35,7 @@ impl Render for AppSidebar {
                         .child(
                             SidebarMenuItem::new(PulsePage::Albums.label())
                                 .icon(IconName::GalleryVerticalEnd)
-                                .active(page == PulsePage::Albums)
+                                .active(page.is_albums_section())
                                 .on_click({
                                     let pulse = pulse.clone();
                                     move |_, _, cx| {

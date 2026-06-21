@@ -3,6 +3,7 @@ use gpui_component::{Root, TitleBar};
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 pub mod actions;
+pub mod artwork_prefetch;
 pub mod components;
 pub mod config;
 pub mod data;

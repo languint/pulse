@@ -9,6 +9,7 @@ pub struct PulseConfig {
     pub theme: String,
     pub keymap: PulseKeymap,
     pub library: LibraryConfig,
+    pub interface: pulse_data::InterfaceSettings,
 }
 
 impl Default for PulseConfig {
@@ -17,6 +18,7 @@ impl Default for PulseConfig {
             theme: pulse_data::DEFAULT_THEME.to_string(),
             keymap: PulseKeymap::default(),
             library: LibraryConfig::default(),
+            interface: pulse_data::InterfaceSettings::default(),
         }
     }
 }
@@ -28,6 +30,7 @@ impl PulseConfig {
             theme: settings.theme,
             keymap,
             library: settings.library,
+            interface: settings.interface,
         }
     }
 
@@ -36,6 +39,7 @@ impl PulseConfig {
         pulse_data::PulseSettings {
             theme: self.theme.clone(),
             library: self.library.clone(),
+            interface: self.interface.clone(),
         }
     }
 

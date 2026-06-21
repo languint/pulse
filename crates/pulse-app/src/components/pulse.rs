@@ -9,11 +9,13 @@ use crate::{
     components::{
         library_roots_dialog::open_library_roots_dialog,
         navigation::PulsePage,
-        pages::{AlbumsPage, ArtistsPage},
+        pages::{AlbumViewerPage, AlbumsPage, ArtistsPage},
         sidebar::AppSidebar,
         toolbar::Toolbar,
     },
 };
+
+use pulse_model::AlbumId;
 
 pub struct Pulse {
     pub focus_handle: FocusHandle,
@@ -22,6 +24,7 @@ pub struct Pulse {
     sidebar: Entity<AppSidebar>,
     albums_page: Entity<AlbumsPage>,
     artists_page: Entity<ArtistsPage>,
+    album_viewer_page: Entity<AlbumViewerPage>,
 }
 
 impl Pulse {
@@ -32,9 +35,10 @@ impl Pulse {
             focus_handle: cx.focus_handle(),
             page: PulsePage::Albums,
             toolbar: cx.new(Toolbar::new),
-            sidebar: cx.new(|_| AppSidebar::new(pulse)),
-            albums_page: cx.new(AlbumsPage::new),
+            sidebar: cx.new(|_| AppSidebar::new(pulse.clone())),
+            albums_page: cx.new(|cx| AlbumsPage::new(pulse.clone(), cx)),
             artists_page: cx.new(ArtistsPage::new),
+            album_viewer_page: cx.new(|_| AlbumViewerPage::new(pulse.clone())),
         }
     }
 
@@ -49,6 +53,16 @@ impl Pulse {
         }
 
         self.page = page;
+        cx.notify();
+    }
+
+    pub fn open_album(&mut self, album_id: AlbumId, cx: &mut gpui::Context<Self>) {
+        self.page = PulsePage::AlbumDetail(album_id);
+        cx.notify();
+    }
+
+    pub fn show_albums(&mut self, cx: &mut gpui::Context<Self>) {
+        self.page = PulsePage::Albums;
         cx.notify();
     }
 }
@@ -68,6 +82,7 @@ impl Render for Pulse {
         let main_page = match self.page {
             PulsePage::Albums => self.albums_page.clone().into_any_element(),
             PulsePage::Artists => self.artists_page.clone().into_any_element(),
+            PulsePage::AlbumDetail(_) => self.album_viewer_page.clone().into_any_element(),
         };
 
         let mut root = div()

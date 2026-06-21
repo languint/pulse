@@ -11,4 +11,4 @@ pub use overrides::{
     artist_override_key, song_override_key,
 };
 pub use paths::PulsePaths;
-pub use settings::{DEFAULT_THEME, PulseSettings};
+pub use settings::{DEFAULT_THEME, InterfaceSettings, PulseSettings};
