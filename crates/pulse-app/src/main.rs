@@ -5,6 +5,7 @@ use gpui_component::{Root, TitleBar};
 pub mod actions;
 pub mod artwork_prefetch;
 pub mod assets;
+pub mod bundled_themes;
 pub mod components;
 pub mod config;
 pub mod data;
@@ -14,11 +15,13 @@ pub mod library;
 pub mod media_controls;
 pub mod player;
 pub mod pulse;
+pub mod theme_list;
 
 use actions::{
-    ManageLibraryRoots, MediaNextTrack, MediaPlayPause, MediaPreviousTrack, Quit, ToggleFullscreen,
+    CommandPaletteTab, ManageLibraryRoots, MediaNextTrack, MediaPlayPause, MediaPreviousTrack, Quit,
+    ToggleCommandPalette, ToggleFullscreen,
 };
-use components::{library_roots_dialog::open_library_roots_dialog, pulse::Pulse};
+use components::{command_palette, library_roots_dialog::open_library_roots_dialog, pulse::Pulse};
 use pulse_keymap::KeymapAction;
 
 use crate::config::PulseConfig;
@@ -35,6 +38,7 @@ fn main() {
         .with_assets(assets::CombinedAssets)
         .run(move |cx| {
             gpui_component::init(cx);
+            command_palette::init(cx);
             if let Err(error) = pulse_runtime::init(cx) {
                 tracing::error!(%error, "failed to initialize Tokio runtime");
                 std::process::exit(1);
@@ -71,6 +75,12 @@ fn main() {
             config
                 .keymap
                 .bind_action(cx, KeymapAction::MediaPreviousTrack, &MediaPreviousTrack);
+            config
+                .keymap
+                .bind_action(cx, KeymapAction::ToggleCommandPalette, &ToggleCommandPalette);
+            config
+                .keymap
+                .bind_action(cx, KeymapAction::OpenCommandPalette, &CommandPaletteTab);
 
             DataPaths::set_global(cx, DataPaths::new(paths.clone()));
             DataOverrides::set_global(cx, DataOverrides(overrides));
@@ -120,7 +130,7 @@ fn main() {
 
                 if let Err(e) = cx.open_window(window_options, |window, cx| {
                     media_controls::init(window, cx);
-                    let pulse = cx.new(Pulse::new);
+                    let pulse = cx.new(|cx| Pulse::new(window, cx));
                     let focus_handle = pulse.read(cx).focus_handle.clone();
                     window.focus(&focus_handle, cx);
                     cx.new(|cx| Root::new(pulse, window, cx))

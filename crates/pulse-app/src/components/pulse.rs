@@ -5,9 +5,10 @@ use gpui::{
 use gpui_component::{ActiveTheme, Root, TITLE_BAR_HEIGHT};
 
 use crate::{
-    actions::{ManageLibraryRoots, ToggleFullscreen},
+    actions::{ManageLibraryRoots, CommandPaletteTab, ToggleCommandPalette, ToggleFullscreen},
     components::{
         breadcrumb::page_breadcrumb,
+        command_palette::CommandPalette,
         library_roots_dialog::open_library_roots_dialog,
         navigation::PulsePage,
         pages::{AlbumViewerPage, AlbumsPage, ArtistViewerPage, ArtistsPage},
@@ -32,14 +33,17 @@ pub struct Pulse {
     album_viewer_page: Entity<AlbumViewerPage>,
     artist_viewer_page: Entity<ArtistViewerPage>,
     player_bar: Entity<PlayerBar>,
+    command_palette: Entity<CommandPalette>,
 }
 
 impl Pulse {
-    pub fn new(cx: &mut gpui::Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut gpui::Context<Self>) -> Self {
         let pulse = cx.entity();
 
+        let focus_handle = cx.focus_handle();
+
         Self {
-            focus_handle: cx.focus_handle(),
+            focus_handle: focus_handle.clone(),
             page: PulsePage::Albums,
             previous_page: None,
             toolbar: cx.new(Toolbar::new),
@@ -49,6 +53,7 @@ impl Pulse {
             album_viewer_page: cx.new(|cx| AlbumViewerPage::new(pulse.clone(), cx)),
             artist_viewer_page: cx.new(|cx| ArtistViewerPage::new(pulse.clone(), cx)),
             player_bar: cx.new(PlayerBar::new),
+            command_palette: cx.new(|cx| CommandPalette::new(window, focus_handle, cx)),
         }
     }
 
@@ -140,6 +145,7 @@ impl Render for Pulse {
         };
 
         let mut root = div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -159,6 +165,18 @@ impl Render for Pulse {
                     }))
                     .on_action(cx.listener(|_, _: &ManageLibraryRoots, window, cx| {
                         open_library_roots_dialog(window, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
+                        this.command_palette.update(cx, |palette, cx| {
+                            palette.toggle(window, cx);
+                        });
+                    }))
+                    .on_action(cx.listener(|this, _: &CommandPaletteTab, window, cx| {
+                        this.command_palette.update(cx, |palette, cx| {
+                            if !palette.is_open() {
+                                palette.handle_tab(window, cx);
+                            }
+                        });
                     }))
                     .child(self.sidebar.clone())
                     .child(
@@ -190,7 +208,8 @@ impl Render for Pulse {
                     ),
             )
             .child(self.player_bar.clone())
-            .children(dialog_layer);
+            .children(dialog_layer)
+            .child(self.command_palette.clone());
 
         // This is needed for now since there is a bug in gpui
         #[cfg(target_os = "windows")]

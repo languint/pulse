@@ -5225,6 +5225,7 @@ dependencies = [
  "rfd",
  "rust-embed",
  "serde",
+ "serde_json",
  "souvlaki",
  "thiserror 2.0.18",
  "tracing",

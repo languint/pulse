@@ -3,6 +3,8 @@ use pulse_library::LibraryConfig;
 use crate::{DataError, PulsePaths};
 
 pub const DEFAULT_THEME: &str = "Pulse Dark";
+pub const THEME_PULSE_DARK: &str = "Pulse Dark";
+pub const THEME_PULSE_LIGHT: &str = "Pulse Light";
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct InterfaceSettings {

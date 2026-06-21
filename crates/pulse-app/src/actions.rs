@@ -8,6 +8,12 @@ actions!(
         ManageLibraryRoots,
         MediaPlayPause,
         MediaNextTrack,
-        MediaPreviousTrack
+        MediaPreviousTrack,
+        ToggleCommandPalette,
+        CommandPaletteSelectUp,
+        CommandPaletteSelectDown,
+        CommandPaletteConfirm,
+        CommandPaletteDismiss,
+        CommandPaletteTab
     ]
 );

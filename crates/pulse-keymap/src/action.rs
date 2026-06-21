@@ -9,6 +9,8 @@ pub enum KeymapAction {
     MediaPlayPause,
     MediaNextTrack,
     MediaPreviousTrack,
+    ToggleCommandPalette,
+    OpenCommandPalette,
 }
 
 impl KeymapAction {
@@ -21,6 +23,8 @@ impl KeymapAction {
             Self::MediaPlayPause => "media_play_pause",
             Self::MediaNextTrack => "media_next_track",
             Self::MediaPreviousTrack => "media_previous_track",
+            Self::ToggleCommandPalette => "toggle_command_palette",
+            Self::OpenCommandPalette => "open_command_palette",
         }
     }
 }

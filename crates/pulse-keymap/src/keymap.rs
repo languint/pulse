@@ -73,6 +73,14 @@ fn default_bindings() -> HashMap<KeymapAction, Vec<String>> {
             KeymapAction::MediaPreviousTrack,
             vec!["[".into(), "mediaprevtrack".into(), "xf86audioprev".into()],
         ),
+        (
+            KeymapAction::ToggleCommandPalette,
+            vec!["ctrl-p".into()],
+        ),
+        (
+            KeymapAction::OpenCommandPalette,
+            vec!["tab".into()],
+        ),
     ])
 }
 
@@ -116,6 +124,20 @@ mod tests {
                 "mediaprevtrack".to_string(),
                 "xf86audioprev".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn default_command_palette_bindings() {
+        let keymap = PulseKeymap::default();
+
+        assert_eq!(
+            keymap.keystrokes_for(KeymapAction::ToggleCommandPalette),
+            &["ctrl-p".to_string()]
+        );
+        assert_eq!(
+            keymap.keystrokes_for(KeymapAction::OpenCommandPalette),
+            &["tab".to_string()]
         );
     }
 

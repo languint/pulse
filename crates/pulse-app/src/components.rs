@@ -1,9 +1,11 @@
 pub mod breadcrumb;
+pub mod command_palette;
 pub mod library_roots_dialog;
 pub mod navigation;
 pub mod pages;
 pub mod player_bar;
 pub mod pulse;
 pub mod sidebar;
+pub mod theme_picker_dialog;
 pub mod toolbar;
 pub mod ui;

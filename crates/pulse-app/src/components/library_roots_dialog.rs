@@ -7,7 +7,7 @@ use gpui::{
 use gpui_component::{
     ActiveTheme, IconName, WindowExt as _,
     button::{Button, ButtonVariants as _},
-    dialog::{DialogFooter, DialogTitle},
+    dialog::{DialogClose, DialogFooter, DialogTitle},
     h_flex, v_flex,
 };
 use pulse_library::LibraryConfig;
@@ -212,16 +212,19 @@ pub fn open_library_roots_dialog(window: &mut Window, cx: &mut App) {
 
     window.open_dialog(cx, move |dialog, _, _| {
         let editor_apply = editor.clone();
-        dialog.w(px(560.)).child(editor.clone()).footer(
+        dialog
+            .w(px(560.))
+            .keyboard(true)
+            .child(editor.clone())
+            .footer(
             DialogFooter::new()
                 .gap_2()
                 .child(
-                    Button::new("cancel-roots")
-                        .label("Cancel")
-                        .outline()
-                        .on_click(|_, window, cx| {
-                            window.close_dialog(cx);
-                        }),
+                    DialogClose::new().child(
+                        Button::new("cancel-roots")
+                            .label("Cancel")
+                            .outline(),
+                    ),
                 )
                 .child(
                     Button::new("apply-roots")
