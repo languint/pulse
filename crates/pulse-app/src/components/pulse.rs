@@ -5,11 +5,12 @@ use gpui::{
 use gpui_component::{ActiveTheme, Root, TITLE_BAR_HEIGHT};
 
 use crate::{
-    actions::{ManageLibraryRoots, CommandPaletteTab, ToggleCommandPalette, ToggleFullscreen},
+    actions::{ManageLibraryRoots, CommandPaletteTab, OpenSettings, ToggleCommandPalette, ToggleFullscreen},
     components::{
         breadcrumb::page_breadcrumb,
         command_palette::CommandPalette,
         library_roots_dialog::open_library_roots_dialog,
+        settings_dialog::open_settings_dialog,
         navigation::PulsePage,
         pages::{AlbumViewerPage, AlbumsPage, ArtistViewerPage, ArtistsPage},
         player_bar::PlayerBar,
@@ -165,6 +166,9 @@ impl Render for Pulse {
                     }))
                     .on_action(cx.listener(|_, _: &ManageLibraryRoots, window, cx| {
                         open_library_roots_dialog(window, cx);
+                    }))
+                    .on_action(cx.listener(|_, _: &OpenSettings, window, cx| {
+                        open_settings_dialog(window, cx);
                     }))
                     .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
                         this.command_palette.update(cx, |palette, cx| {

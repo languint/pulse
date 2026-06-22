@@ -18,10 +18,13 @@ pub mod pulse;
 pub mod theme_list;
 
 use actions::{
-    CommandPaletteTab, ManageLibraryRoots, MediaNextTrack, MediaPlayPause, MediaPreviousTrack, Quit,
-    ToggleCommandPalette, ToggleFullscreen,
+    CommandPaletteTab, ManageLibraryRoots, MediaNextTrack, MediaPlayPause, MediaPreviousTrack,
+    OpenSettings, Quit, ToggleCommandPalette, ToggleFullscreen,
 };
-use components::{command_palette, library_roots_dialog::open_library_roots_dialog, pulse::Pulse};
+use components::{
+    command_palette, library_roots_dialog::open_library_roots_dialog,
+    pulse::Pulse, settings_dialog::open_settings_dialog,
+};
 use pulse_keymap::KeymapAction;
 
 use crate::config::PulseConfig;
@@ -96,6 +99,14 @@ fn main() {
                 if let Some(window) = cx.active_window() {
                     let _ = window.update(cx, |_, window, cx| {
                         open_library_roots_dialog(window, cx);
+                    });
+                }
+            });
+
+            cx.on_action(|_: &OpenSettings, cx| {
+                if let Some(window) = cx.active_window() {
+                    let _ = window.update(cx, |_, window, cx| {
+                        open_settings_dialog(window, cx);
                     });
                 }
             });

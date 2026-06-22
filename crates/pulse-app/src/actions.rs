@@ -6,6 +6,7 @@ actions!(
         ToggleFullscreen,
         Quit,
         ManageLibraryRoots,
+        OpenSettings,
         MediaPlayPause,
         MediaNextTrack,
         MediaPreviousTrack,

@@ -19,6 +19,7 @@ use crate::actions::{
     CommandPaletteSelectUp, CommandPaletteTab,
 };
 use crate::components::library_roots_dialog::open_library_roots_dialog;
+use crate::components::settings_dialog::open_settings_dialog;
 use crate::components::theme_picker_dialog::open_themes_folder;
 use crate::config::PulseConfig;
 use crate::pulse;
@@ -39,6 +40,7 @@ enum CommandKind {
     ChangeTheme,
     SetTheme(String),
     ManageLibraryRoots,
+    OpenSettings,
     OpenThemesFolder,
 }
 
@@ -278,16 +280,18 @@ impl CommandPalette {
                 self.close_palette(window, cx, false);
             }
             (_, kind) => {
-                if matches!(kind, CommandKind::ManageLibraryRoots) {
+                if matches!(
+                    kind,
+                    CommandKind::ManageLibraryRoots | CommandKind::OpenSettings
+                ) {
                     self.open = false;
                     self.mode = PaletteMode::Commands;
                     self.list_focused = false;
                     cx.notify();
-                    execute_command(kind, window, cx);
                 } else {
                     self.close_palette(window, cx, true);
-                    execute_command(kind, window, cx);
                 }
+                execute_command(kind, window, cx);
             }
         }
     }
@@ -536,6 +540,11 @@ fn build_commands() -> Vec<CommandItem> {
             kind: CommandKind::ChangeTheme,
         },
         CommandItem {
+            label: "Settings…".into(),
+            keywords: "settings preferences configuration toml".into(),
+            kind: CommandKind::OpenSettings,
+        },
+        CommandItem {
             label: "Library: Manage Roots…".into(),
             keywords: "library roots folders scan music".into(),
             kind: CommandKind::ManageLibraryRoots,
@@ -570,6 +579,7 @@ fn execute_command(kind: CommandKind, window: &mut Window, cx: &mut App) {
         CommandKind::ChangeTheme => {}
         CommandKind::SetTheme(name) => pulse::set_theme(cx, &name),
         CommandKind::ManageLibraryRoots => open_library_roots_dialog(window, cx),
+        CommandKind::OpenSettings => open_settings_dialog(window, cx),
         CommandKind::OpenThemesFolder => open_themes_folder(cx),
     }
 }

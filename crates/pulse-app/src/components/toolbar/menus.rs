@@ -2,7 +2,7 @@ use gpui::{App, Entity, Global, Menu, MenuItem, SharedString, UpdateGlobal};
 use gpui_component::{GlobalState, menu::AppMenuBar};
 
 use crate::actions::{
-    ManageLibraryRoots, Quit, ToggleCommandPalette, ToggleFullscreen,
+    ManageLibraryRoots, OpenSettings, Quit, ToggleCommandPalette, ToggleFullscreen,
 };
 
 struct MenuState {
@@ -40,6 +40,8 @@ fn build_menus() -> Vec<Menu> {
         Menu {
             name: SharedString::from("Pulse"),
             items: vec![
+                MenuItem::action("Settings...", OpenSettings),
+                MenuItem::separator(),
                 MenuItem::action("Toggle Fullscreen", ToggleFullscreen),
                 MenuItem::separator(),
                 MenuItem::action("Quit", Quit),
