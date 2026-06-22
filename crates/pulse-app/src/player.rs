@@ -109,6 +109,13 @@ impl PulsePlayer {
     }
 
     #[must_use]
+    pub fn current_track_path(cx: &App) -> Option<PathBuf> {
+        let snapshot = Self::snapshot(cx);
+        let index = snapshot.current_index?;
+        Some(snapshot.queue.get(index)?.path.clone())
+    }
+
+    #[must_use]
     pub fn current_song_id(cx: &App) -> Option<SongId> {
         current_song(cx).map(|song| song.id)
     }
@@ -170,6 +177,31 @@ impl PulsePlayer {
             .inner
             .as_ref()
             .and_then(|player| player.sample_capture().sample_rate())
+    }
+
+    #[must_use]
+    pub fn current_track_lookup(cx: &App) -> Option<pulse_library::LyricsLookup> {
+        let song = current_song(cx)?;
+        let store = cx.global::<PulseLibrary>().inner().store();
+        let album_name = song
+            .album_id
+            .and_then(|album_id| store.albums().get(&album_id))
+            .map(|album| album.title.to_string())
+            .unwrap_or_default();
+
+        let artist_names: Vec<_> = song
+            .track_artists
+            .iter()
+            .filter_map(|id| store.artists().get(id))
+            .map(|artist| artist.name.as_str())
+            .collect();
+
+        Some(pulse_library::LyricsLookup {
+            track_name: song.title.to_string(),
+            artist_name: artist_names.join(", "),
+            album_name,
+            duration_secs: song.duration_ms.div_ceil(1000),
+        })
     }
 }
 

@@ -12,6 +12,6 @@ pub use overrides::{
 };
 pub use paths::PulsePaths;
 pub use settings::{
-    DEFAULT_THEME, InterfaceSettings, PulseSettings, ResolvedVisualizerSettings,
+    DEFAULT_THEME, InterfaceSettings, LyricsSettings, PulseSettings, ResolvedVisualizerSettings,
     THEME_PULSE_DARK, THEME_PULSE_LIGHT, VisualizerMode, VisualizerQuality, VisualizerSettings,
 };

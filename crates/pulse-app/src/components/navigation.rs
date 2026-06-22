@@ -6,6 +6,7 @@ pub enum PulsePage {
     Albums,
     Artists,
     Visualizer,
+    Lyrics,
     AlbumDetail(AlbumId),
     ArtistDetail(ArtistId),
 }
@@ -17,6 +18,7 @@ impl PulsePage {
             Self::Albums | Self::AlbumDetail(_) => "Albums",
             Self::Artists | Self::ArtistDetail(_) => "Artists",
             Self::Visualizer => "Visualizer",
+            Self::Lyrics => "Lyrics",
         }
     }
 
@@ -36,10 +38,24 @@ impl PulsePage {
     }
 
     #[must_use]
+    pub const fn is_lyrics(self) -> bool {
+        matches!(self, Self::Lyrics)
+    }
+
+    #[must_use]
+    pub const fn is_full_bleed(self) -> bool {
+        matches!(self, Self::Visualizer | Self::Lyrics)
+    }
+
+    #[must_use]
     pub const fn album_detail(self) -> Option<AlbumId> {
         match self {
             Self::AlbumDetail(id) => Some(id),
-            Self::Albums | Self::Artists | Self::ArtistDetail(_) | Self::Visualizer => None,
+            Self::Albums
+            | Self::Artists
+            | Self::ArtistDetail(_)
+            | Self::Visualizer
+            | Self::Lyrics => None,
         }
     }
 
@@ -47,7 +63,11 @@ impl PulsePage {
     pub const fn artist_detail(self) -> Option<ArtistId> {
         match self {
             Self::ArtistDetail(id) => Some(id),
-            Self::Albums | Self::Artists | Self::AlbumDetail(_) | Self::Visualizer => None,
+            Self::Albums
+            | Self::Artists
+            | Self::AlbumDetail(_)
+            | Self::Visualizer
+            | Self::Lyrics => None,
         }
     }
 
@@ -56,7 +76,7 @@ impl PulsePage {
         match self {
             Self::Albums | Self::AlbumDetail(_) => Self::Albums,
             Self::Artists | Self::ArtistDetail(_) => Self::Artists,
-            Self::Visualizer => Self::Albums,
+            Self::Visualizer | Self::Lyrics => Self::Albums,
         }
     }
 
@@ -66,6 +86,7 @@ impl PulsePage {
             Self::Albums => vec![Self::Albums],
             Self::Artists => vec![Self::Artists],
             Self::Visualizer => vec![Self::Visualizer],
+            Self::Lyrics => vec![Self::Lyrics],
             Self::AlbumDetail(id) => vec![Self::Albums, Self::AlbumDetail(id)],
             Self::ArtistDetail(id) => vec![Self::Artists, Self::ArtistDetail(id)],
         }

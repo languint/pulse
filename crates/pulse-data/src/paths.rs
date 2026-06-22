@@ -51,6 +51,8 @@ impl PulsePaths {
             .map_err(|source| DataError::write(self.custom_artwork_dir(), source))?;
         std::fs::create_dir_all(self.artwork_cache_dir())
             .map_err(|source| DataError::write(self.artwork_cache_dir(), source))?;
+        std::fs::create_dir_all(self.lyrics_dir())
+            .map_err(|source| DataError::write(self.lyrics_dir(), source))?;
         Ok(())
     }
 
@@ -97,6 +99,11 @@ impl PulsePaths {
     #[must_use]
     pub fn artwork_cache_dir(&self) -> PathBuf {
         self.cache.join("artwork")
+    }
+
+    #[must_use]
+    pub fn lyrics_dir(&self) -> PathBuf {
+        self.data.join("lyrics")
     }
 
     /// Resolve a path stored in user data (overrides, etc.) relative to [`Self::data_dir`].
@@ -188,6 +195,7 @@ mod tests {
             PathBuf::from("/data/artwork/custom")
         );
         assert_eq!(paths.artwork_cache_dir(), PathBuf::from("/cache/artwork"));
+        assert_eq!(paths.lyrics_dir(), PathBuf::from("/data/lyrics"));
     }
 
     #[test]

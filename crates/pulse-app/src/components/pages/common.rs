@@ -134,6 +134,7 @@ pub fn page_back_label(cx: &gpui::App, page: PulsePage) -> SharedString {
             resolve_artist_display(cx, id).map_or_else(|| "Artist".into(), |display| display.name)
         }
         PulsePage::Visualizer => "Visualizer".into(),
+        PulsePage::Lyrics => "Lyrics".into(),
     }
 }
 

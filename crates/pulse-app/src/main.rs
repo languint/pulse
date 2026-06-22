@@ -12,6 +12,7 @@ pub mod data;
 pub mod error;
 pub mod icons;
 pub mod library;
+pub mod lyrics;
 pub mod media_controls;
 pub mod player;
 pub mod pulse;
@@ -97,6 +98,7 @@ fn main() {
 
             PulseLibrary::init(cx, config.library.clone(), paths.artwork_cache_dir());
             PulsePlayer::init(cx);
+            lyrics::PulseLyrics::init(cx);
 
             cx.on_action(|_: &ManageLibraryRoots, cx| {
                 if let Some(window) = cx.active_window() {

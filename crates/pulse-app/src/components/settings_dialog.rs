@@ -92,12 +92,18 @@ impl SettingsEditor {
         self.draft.interface.aggressively_prefetch_artwork = enabled;
         cx.notify();
     }
+
+    fn set_auto_fetch_lyrics(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        self.draft.lyrics.auto_fetch_lyrics = enabled;
+        cx.notify();
+    }
 }
 
 impl Render for SettingsEditor {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let include_system_music = self.draft.library.include_xdg_music_dir;
         let prefetch_artwork = self.draft.interface.aggressively_prefetch_artwork;
+        let auto_fetch_lyrics = self.draft.lyrics.auto_fetch_lyrics;
 
         v_flex()
             .gap_4()
@@ -193,6 +199,33 @@ impl Render for SettingsEditor {
                             .child(
                                 GroupBox::new()
                                     .with_variant(GroupBoxVariant::Outline)
+                                    .title("Lyrics")
+                                    .child(
+                                        v_form()
+                                            .label_width(px(180.))
+                                            .child(
+                                                field()
+                                                    .label("Fetch lyrics online")
+                                                    .description(
+                                                        "Look up synced lyrics from LRCLIB when no sidecar .lrc file is present. Results are cached in your Pulse data folder.",
+                                                    )
+                                                    .child(
+                                                        Switch::new("auto-fetch-lyrics")
+                                                            .checked(auto_fetch_lyrics)
+                                                            .on_click(cx.listener(
+                                                                |this, checked: &bool, _, cx| {
+                                                                    this.set_auto_fetch_lyrics(
+                                                                        *checked, cx,
+                                                                    );
+                                                                },
+                                                            )),
+                                                    ),
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                GroupBox::new()
+                                    .with_variant(GroupBoxVariant::Outline)
                                     .title("Interface")
                                     .child(
                                         v_form()
@@ -267,10 +300,16 @@ pub fn open_settings_dialog(window: &mut Window, cx: &mut App) {
 
 fn apply_settings(cx: &mut App, draft: &PulseSettings) {
     let previous = cx.global::<PulseConfig>().to_settings();
+    let lyrics_changed = draft.lyrics != previous.lyrics;
 
     PulseConfig::update_global(cx, |config, _| {
         config.interface = draft.interface.clone();
+        config.lyrics = draft.lyrics.clone();
     });
+
+    if lyrics_changed {
+        crate::lyrics::PulseLyrics::reset_fetch_state(cx);
+    }
 
     if draft.library != previous.library {
         PulseLibrary::apply_config(cx, draft.library.clone());

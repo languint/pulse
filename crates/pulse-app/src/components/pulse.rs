@@ -17,13 +17,16 @@ use crate::{
         settings_dialog::open_settings_dialog,
         visualizer_settings_dialog::{open_visualizer_settings_dialog, set_visualizer_mode},
         navigation::PulsePage,
-        pages::{AlbumViewerPage, AlbumsPage, ArtistViewerPage, ArtistsPage, VisualizerPage},
+        pages::{AlbumViewerPage, AlbumsPage, ArtistViewerPage, ArtistsPage, LyricsPage, VisualizerPage},
+        lyrics_sidebar::LyricsSidebar,
         player_bar::PlayerBar,
         sidebar::AppSidebar,
         toolbar::Toolbar,
     },
 };
 
+use crate::lyrics::PulseLyrics;
+use crate::player::PulsePlayer;
 use pulse_model::{AlbumId, ArtistId};
 use pulse_data::VisualizerMode;
 
@@ -44,6 +47,8 @@ pub struct Pulse {
     album_viewer_page: Entity<AlbumViewerPage>,
     artist_viewer_page: Entity<ArtistViewerPage>,
     visualizer_page: Entity<VisualizerPage>,
+    lyrics_page: Entity<LyricsPage>,
+    lyrics_sidebar: Entity<LyricsSidebar>,
     player_bar: Entity<PlayerBar>,
     command_palette: Entity<CommandPalette>,
 }
@@ -65,6 +70,8 @@ impl Pulse {
             album_viewer_page: cx.new(|cx| AlbumViewerPage::new(pulse.clone(), cx)),
             artist_viewer_page: cx.new(|cx| ArtistViewerPage::new(pulse.clone(), cx)),
             visualizer_page: cx.new(VisualizerPage::new),
+            lyrics_page: cx.new(LyricsPage::new),
+            lyrics_sidebar: cx.new(LyricsSidebar::new),
             player_bar: cx.new(|cx| PlayerBar::new(pulse.clone(), cx)),
             command_palette: cx.new(|cx| CommandPalette::new(window, focus_handle, cx)),
         }
@@ -126,6 +133,15 @@ impl Pulse {
         self.set_page(PulsePage::Artists, cx);
     }
 
+    pub fn show_lyrics(&mut self, cx: &mut gpui::Context<Self>) {
+        self.set_page(PulsePage::Lyrics, cx);
+    }
+
+    pub fn toggle_lyrics_sidebar(&mut self, cx: &mut gpui::Context<Self>) {
+        PulseLyrics::toggle_sidebar(cx);
+        cx.notify();
+    }
+
     pub fn open_visualizer(&mut self, cx: &mut gpui::Context<Self>) {
         if self.page.is_visualizer() {
             return;
@@ -161,6 +177,11 @@ impl Pulse {
         self.page.is_visualizer()
     }
 
+    #[must_use]
+    pub const fn is_lyrics(&self) -> bool {
+        self.page.is_lyrics()
+    }
+
     fn navigate_to(&mut self, page: PulsePage, cx: &mut gpui::Context<Self>) {
         if self.page == page {
             return;
@@ -189,10 +210,14 @@ impl Render for Pulse {
             PulsePage::Albums => self.albums_page.clone().into_any_element(),
             PulsePage::Artists => self.artists_page.clone().into_any_element(),
             PulsePage::Visualizer => self.visualizer_page.clone().into_any_element(),
+            PulsePage::Lyrics => self.lyrics_page.clone().into_any_element(),
             PulsePage::AlbumDetail(_) => self.album_viewer_page.clone().into_any_element(),
             PulsePage::ArtistDetail(_) => self.artist_viewer_page.clone().into_any_element(),
         };
-        let show_sidebar = !self.page.is_visualizer();
+        let show_library_sidebar = !self.page.is_full_bleed();
+        let show_lyrics_sidebar = PulseLyrics::sidebar_open(cx)
+            && !self.page.is_full_bleed()
+            && PulsePlayer::snapshot(cx).current_index.is_some();
 
         let mut root = div()
             .relative()
@@ -246,7 +271,7 @@ impl Render for Pulse {
                             .min_h_0()
                             .flex()
                             .min_w_0()
-                            .when(show_sidebar, |this| this.child(self.sidebar.clone()))
+                            .when(show_library_sidebar, |this| this.child(self.sidebar.clone()))
                             .child(
                                 div()
                                     .id("main")
@@ -257,7 +282,7 @@ impl Render for Pulse {
                                     .flex_col()
                                     .overflow_hidden()
                                     .bg(background)
-                                    .when(show_sidebar, |this| {
+                                    .when(show_library_sidebar, |this| {
                                         this.child(
                                             div()
                                                 .flex_shrink_0()
@@ -275,7 +300,10 @@ impl Render for Pulse {
                                             .overflow_hidden()
                                             .child(main_page),
                                     ),
-                            ),
+                            )
+                            .when(show_lyrics_sidebar, |this| {
+                                this.child(self.lyrics_sidebar.clone())
+                            }),
                     ),
             )
             .child(self.player_bar.clone())

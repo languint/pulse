@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
+use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 
 use crate::sample_capture::SampleCapture;
 use crate::sample_tap::SampleTap;
@@ -136,8 +136,6 @@ impl PlayerHandle {
     }
 }
 
-const SEEK_BACK_TOLERANCE_MS: u64 = 100;
-
 struct AudioThread {
     _device_sink: MixerDeviceSink,
     player: Player,
@@ -151,22 +149,11 @@ struct AudioThread {
 impl AudioThread {
     fn playback_position_ms(&mut self) -> u64 {
         if self.state == PlaybackState::Stopped {
-            self.playhead_offset_ms = 0;
             return 0;
         }
 
         let player_pos = u64::try_from(self.player.get_pos().as_millis()).unwrap_or(0);
-
-        if self.playhead_offset_ms > 0 {
-            if player_pos.saturating_add(SEEK_BACK_TOLERANCE_MS) >= self.playhead_offset_ms {
-                self.playhead_offset_ms = 0;
-                player_pos
-            } else {
-                self.playhead_offset_ms.saturating_add(player_pos)
-            }
-        } else {
-            player_pos
-        }
+        self.playhead_offset_ms.saturating_add(player_pos)
     }
 
     fn publish_snapshot(&mut self, snapshot: &Arc<Mutex<PlayerSnapshot>>) {
@@ -209,29 +196,19 @@ impl AudioThread {
         self.player.set_volume(0.0);
         self.player.clear();
 
+        let seek_ms = seek_ms.min(u64::from(track.duration_ms));
+
         let file = File::open(&track.path).map_err(|_| PlayerError::OpenFile {
             path: track.path.clone(),
         })?;
         let decoder = Decoder::try_from(file).map_err(|_| PlayerError::Decode {
             path: track.path.clone(),
         })?;
-        let tapped = SampleTap::new(decoder, self.sample_capture.clone());
-
-        let seek_ms = seek_ms.min(u64::from(track.duration_ms));
+        let source = decoder.skip_duration(Duration::from_millis(seek_ms));
+        let tapped = SampleTap::new(source, self.sample_capture.clone());
 
         self.player.append(tapped);
         self.player.pause();
-
-        if seek_ms > 0
-            && let Err(error) = self.player.try_seek(Duration::from_millis(seek_ms))
-        {
-            tracing::warn!(
-                %error,
-                seek_ms,
-                path = ?track.path,
-                "player seek failed after reload"
-            );
-        }
 
         self.playhead_offset_ms = seek_ms;
         self.player.set_volume(volume);
@@ -304,8 +281,9 @@ impl AudioThread {
         };
 
         let position_ms = position_ms.min(u64::from(track.duration_ms));
+        let autoplay = self.state == PlaybackState::Playing;
 
-        if let Err(error) = self.load_track(index, position_ms, false) {
+        if let Err(error) = self.load_track(index, position_ms, autoplay) {
             tracing::error!(%error, "failed to seek");
         }
     }

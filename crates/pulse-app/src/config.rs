@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gpui::Global;
 use pulse_keymap::{KeymapAction, PulseKeymap};
 use pulse_library::LibraryConfig;
-use pulse_data::{InterfaceSettings, VisualizerSettings};
+use pulse_data::{InterfaceSettings, LyricsSettings, VisualizerSettings};
 
 #[derive(Clone)]
 pub struct PulseConfig {
@@ -11,6 +11,7 @@ pub struct PulseConfig {
     pub keymap: PulseKeymap,
     pub library: LibraryConfig,
     pub interface: InterfaceSettings,
+    pub lyrics: LyricsSettings,
     pub visualizer: VisualizerSettings,
 }
 
@@ -21,6 +22,7 @@ impl Default for PulseConfig {
             keymap: PulseKeymap::default(),
             library: LibraryConfig::default(),
             interface: pulse_data::InterfaceSettings::default(),
+            lyrics: pulse_data::LyricsSettings::default(),
             visualizer: VisualizerSettings::default(),
         }
     }
@@ -34,6 +36,7 @@ impl PulseConfig {
             keymap,
             library: settings.library,
             interface: settings.interface,
+            lyrics: settings.lyrics,
             visualizer: settings.visualizer,
         }
     }
@@ -44,6 +47,7 @@ impl PulseConfig {
             theme: self.theme.clone(),
             library: self.library.clone(),
             interface: self.interface.clone(),
+            lyrics: self.lyrics.clone(),
             visualizer: self.visualizer.clone(),
         }
     }

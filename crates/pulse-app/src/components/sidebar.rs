@@ -56,6 +56,7 @@ impl Render for AppSidebar {
                                 .icon(IconName::User)
                                 .active(page.is_artists_section())
                                 .on_click({
+                                    let pulse = pulse.clone();
                                     move |_, _, cx| {
                                         pulse.update(cx, |pulse, cx| {
                                             pulse.show_artists(cx);
@@ -63,6 +64,23 @@ impl Render for AppSidebar {
                                     }
                                 }),
                         ),
+                ),
+            )
+            .child(
+                SidebarGroup::new("Now Playing").child(
+                    SidebarMenu::new().child(
+                        SidebarMenuItem::new(PulsePage::Lyrics.label())
+                            .icon(crate::icons::PulseIcon::ScrollText)
+                            .active(page.is_lyrics())
+                            .on_click({
+                                let pulse = pulse.clone();
+                                move |_, _, cx| {
+                                    pulse.update(cx, |pulse, cx| {
+                                        pulse.show_lyrics(cx);
+                                    });
+                                }
+                            }),
+                    ),
                 ),
             )
     }

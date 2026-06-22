@@ -1,6 +1,8 @@
 pub mod breadcrumb;
 pub mod command_palette;
 pub mod library_roots_dialog;
+pub mod lyrics_panel;
+pub mod lyrics_sidebar;
 pub mod navigation;
 pub mod pages;
 pub mod player_bar;

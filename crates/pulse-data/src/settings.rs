@@ -154,6 +154,20 @@ impl VisualizerSettings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct LyricsSettings {
+    #[serde(default = "default_auto_fetch_lyrics")]
+    pub auto_fetch_lyrics: bool,
+}
+
+impl Default for LyricsSettings {
+    fn default() -> Self {
+        Self {
+            auto_fetch_lyrics: default_auto_fetch_lyrics(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct InterfaceSettings {
     #[serde(default = "default_aggressively_prefetch_artwork")]
     pub aggressively_prefetch_artwork: bool,
@@ -179,6 +193,9 @@ pub struct PulseSettings {
     pub interface: InterfaceSettings,
 
     #[serde(default)]
+    pub lyrics: LyricsSettings,
+
+    #[serde(default)]
     pub visualizer: VisualizerSettings,
 }
 
@@ -188,6 +205,7 @@ impl Default for PulseSettings {
             theme: default_theme(),
             library: LibraryConfig::default(),
             interface: InterfaceSettings::default(),
+            lyrics: LyricsSettings::default(),
             visualizer: VisualizerSettings::default(),
         }
     }
@@ -231,6 +249,10 @@ impl PulseSettings {
 
 fn default_theme() -> String {
     DEFAULT_THEME.to_string()
+}
+
+const fn default_auto_fetch_lyrics() -> bool {
+    true
 }
 
 const fn default_aggressively_prefetch_artwork() -> bool {

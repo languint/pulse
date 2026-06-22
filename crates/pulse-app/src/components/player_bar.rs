@@ -13,6 +13,7 @@ use gpui_component::{
 
 use crate::components::pulse::Pulse;
 use crate::library::LibraryScanState;
+use crate::lyrics::PulseLyrics;
 use crate::media_controls;
 use crate::player::PulsePlayer;
 use crate::{
@@ -84,23 +85,25 @@ pub struct PlayerBar {
     dragging: bool,
     resume_after_seek: bool,
     pending_seek_position: Option<Point<Pixels>>,
+    scrub_fraction: Option<f32>,
 }
 
 impl PlayerBar {
     pub fn new(pulse: Entity<Pulse>, cx: &mut Context<Self>) -> Self {
-        let entity = cx.entity();
-        cx.spawn(async move |_, cx| {
+        cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
                     .timer(Duration::from_millis(250))
                     .await;
-                entity.update(cx, |_, cx| {
+                this.update(cx, |_, cx| {
                     media_controls::poll(cx);
+                    PulseLyrics::sync_with_player(cx);
                     if LibraryScanState::is_in_progress(cx) {
                         cx.refresh_windows();
                     }
                     cx.notify();
-                });
+                })
+                .ok();
             }
         })
         .detach();
@@ -113,6 +116,7 @@ impl PlayerBar {
             dragging: false,
             resume_after_seek: false,
             pending_seek_position: None,
+            scrub_fraction: None,
         }
     }
 
@@ -147,7 +151,8 @@ impl PlayerBar {
             }
         }
 
-        self.seek_at(position, cx);
+        self.scrub_fraction = Some(fraction_from_position(position, self.seek_bounds));
+        cx.notify();
     }
 
     fn pointer_up(&mut self, position: Option<Point<Pixels>>, cx: &mut Context<Self>) {
@@ -155,9 +160,7 @@ impl PlayerBar {
             return;
         }
 
-        if !self.dragging
-            && let Some(position) = position.or(self.pending_seek_position)
-        {
+        if let Some(position) = position.or(self.pending_seek_position) {
             self.seek_at(position, cx);
         }
 
@@ -169,6 +172,7 @@ impl PlayerBar {
         self.dragging = false;
         self.resume_after_seek = false;
         self.pending_seek_position = None;
+        self.scrub_fraction = None;
         cx.notify();
     }
 }
@@ -180,11 +184,18 @@ impl Render for PlayerBar {
         let title = PulsePlayer::current_track_title(cx).unwrap_or_else(|| "Not playing".into());
         let subtitle = PulsePlayer::current_track_subtitle(cx);
         let artwork = PulsePlayer::current_track_artwork(cx);
-        let position_label = duration_label_ms(snapshot.position_ms);
+        let position_ms = self
+            .scrub_fraction
+            .map(|fraction| fraction_to_position_ms(fraction, snapshot.duration_ms))
+            .unwrap_or(snapshot.position_ms);
+        let position_label = duration_label_ms(position_ms);
         let duration_label = duration_label_ms(snapshot.duration_ms);
         let is_playing = PulsePlayer::is_playing(cx);
-        let progress = progress_fraction(snapshot.position_ms, snapshot.duration_ms);
+        let progress = self
+            .scrub_fraction
+            .unwrap_or_else(|| progress_fraction(snapshot.position_ms, snapshot.duration_ms));
         let visualizer_active = self.pulse.read(cx).is_visualizer();
+        let lyrics_sidebar_open = PulseLyrics::sidebar_open(cx);
         let (border, background, muted_foreground) = {
             let theme = cx.theme();
             (theme.border, theme.background, theme.muted_foreground)
@@ -274,6 +285,25 @@ impl Render for PlayerBar {
                             .items_center()
                             .gap_1()
                             .px_4()
+                            .child(
+                                Button::new("player-lyrics")
+                                    .ghost()
+                                    .icon(PulseIcon::ScrollText)
+                                    .tooltip("Lyrics sidebar")
+                                    .disabled(!has_track)
+                                    .map(|button| {
+                                        if lyrics_sidebar_open {
+                                            button.primary()
+                                        } else {
+                                            button
+                                        }
+                                    })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.pulse.update(cx, |pulse, cx| {
+                                            pulse.toggle_lyrics_sidebar(cx);
+                                        });
+                                    })),
+                            )
                             .child(
                                 Button::new("player-visualizer")
                                     .ghost()

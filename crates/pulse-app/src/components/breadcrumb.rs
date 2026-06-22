@@ -44,5 +44,6 @@ fn navigate_to_page(pulse: &mut Pulse, page: PulsePage, cx: &mut gpui::Context<P
         PulsePage::AlbumDetail(album_id) => pulse.open_album(album_id, cx),
         PulsePage::ArtistDetail(artist_id) => pulse.open_artist(artist_id, cx),
         PulsePage::Visualizer => pulse.show_visualizer(cx),
+        PulsePage::Lyrics => pulse.show_lyrics(cx),
     }
 }
