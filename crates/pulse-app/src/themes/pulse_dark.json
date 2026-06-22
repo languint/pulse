@@ -7,6 +7,8 @@
     {
       "name": "Pulse Dark",
       "mode": "dark",
+      "radius": 6,
+      "radius.lg": 8,
       "colors": {
         "accent.background": "#2b2b2b",
         "accent.foreground": "#cccccc",

@@ -14,6 +14,7 @@ pub fn init(cx: &mut App, paths: &PulsePaths) {
 
     cx.observe_global::<ThemeRegistry>(|cx| {
         crate::bundled_themes::inject_bundled_themes(cx);
+        refresh_after_theme_reload(cx);
     })
     .detach();
 

@@ -6,6 +6,25 @@ use gpui_component::{ThemeConfig, ThemeRegistry};
 
 use crate::bundled_themes::{bundled_sort_key, bundled_themes, resolve_theme};
 
+const DEFAULT_RADIUS: usize = 6;
+const DEFAULT_RADIUS_LG: usize = 8;
+
+#[must_use]
+pub fn normalized_theme_config(theme: Rc<ThemeConfig>) -> Rc<ThemeConfig> {
+    if theme.radius.is_some() && theme.radius_lg.is_some() {
+        return theme;
+    }
+
+    let mut config = theme.as_ref().clone();
+    if config.radius.is_none() {
+        config.radius = Some(DEFAULT_RADIUS);
+    }
+    if config.radius_lg.is_none() {
+        config.radius_lg = Some(DEFAULT_RADIUS_LG);
+    }
+    Rc::new(config)
+}
+
 /// Themes shown in Pulse's picker: bundled Pulse themes and user themes, not gpui defaults.
 pub fn selectable_themes(cx: &gpui::App) -> Vec<Rc<ThemeConfig>> {
     let mut themes: HashMap<_, Rc<ThemeConfig>> = HashMap::new();
@@ -25,11 +44,7 @@ pub fn selectable_themes(cx: &gpui::App) -> Vec<Rc<ThemeConfig>> {
     themes.sort_by(|left, right| {
         bundled_sort_key(&left.name)
             .cmp(&bundled_sort_key(&right.name))
-            .then(
-                left.name
-                    .to_lowercase()
-                    .cmp(&right.name.to_lowercase()),
-            )
+            .then(left.name.to_lowercase().cmp(&right.name.to_lowercase()))
     });
     themes
 }
@@ -43,6 +58,7 @@ pub fn theme_by_name(cx: &gpui::App, name: &str) -> Option<Rc<ThemeConfig>> {
         .get(&name)
         .cloned()
         .or_else(|| resolve_theme(name.as_ref()))
+        .map(normalized_theme_config)
 }
 
 #[cfg(test)]
@@ -58,5 +74,35 @@ mod tests {
 
         assert!(names.contains(&"Pulse Dark".to_string()));
         assert!(names.contains(&"Pulse Light".to_string()));
+    }
+
+    #[test]
+    fn normalizes_missing_radius_tokens() {
+        let theme = Rc::new(ThemeConfig {
+            name: "Test".into(),
+            mode: gpui_component::ThemeMode::Dark,
+            radius: None,
+            radius_lg: None,
+            ..ThemeConfig::default()
+        });
+
+        let normalized = normalized_theme_config(theme);
+        assert_eq!(normalized.radius, Some(DEFAULT_RADIUS));
+        assert_eq!(normalized.radius_lg, Some(DEFAULT_RADIUS_LG));
+    }
+
+    #[test]
+    fn preserves_explicit_zero_radius() {
+        let theme = Rc::new(ThemeConfig {
+            name: "Matrix".into(),
+            mode: gpui_component::ThemeMode::Dark,
+            radius: Some(0),
+            radius_lg: Some(0),
+            ..ThemeConfig::default()
+        });
+
+        let normalized = normalized_theme_config(theme);
+        assert_eq!(normalized.radius, Some(0));
+        assert_eq!(normalized.radius_lg, Some(0));
     }
 }

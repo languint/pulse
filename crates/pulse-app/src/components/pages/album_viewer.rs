@@ -507,7 +507,7 @@ fn album_detail_panel(
             .h_full()
             .gap_4()
             .px_6()
-            .py_6()
+            .pb_6()
             .overflow_y_scroll()
             .border_l_1()
             .border_color(theme.border)

@@ -7,6 +7,8 @@
     {
       "name": "Pulse Light",
       "mode": "light",
+      "radius": 6,
+      "radius.lg": 8,
       "colors": {
         "accent.background": "#f3f3f3",
         "accent.foreground": "#3b3b3b",
