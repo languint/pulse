@@ -11,11 +11,14 @@ use gpui_component::{
     h_flex, v_flex,
 };
 
-use crate::components::pages::{artwork_tile_content, format_duration_ms};
 use crate::components::pulse::Pulse;
 use crate::library::LibraryScanState;
 use crate::media_controls;
 use crate::player::PulsePlayer;
+use crate::{
+    components::pages::{artwork_tile_content, format_duration_ms},
+    icons::PulseIcon,
+};
 
 const PLAYER_BAR_HEIGHT: f32 = 88.;
 const PLAYER_ARTWORK_SIZE: f32 = 56.;
@@ -274,7 +277,7 @@ impl Render for PlayerBar {
                             .child(
                                 Button::new("player-visualizer")
                                     .ghost()
-                                    .icon(IconName::ChartPie)
+                                    .icon(PulseIcon::AudioLines)
                                     .tooltip("Visualizer")
                                     .map(|button| {
                                         if visualizer_active {
