@@ -154,6 +154,23 @@ impl PulsePlayer {
     pub fn is_playing(cx: &App) -> bool {
         Self::snapshot(cx).state == PlaybackState::Playing
     }
+
+    #[must_use]
+    pub fn sample_snapshot(cx: &App) -> Vec<f32> {
+        cx.global::<Self>()
+            .inner
+            .as_ref()
+            .map(|player| player.sample_capture().snapshot())
+            .unwrap_or_default()
+    }
+
+    #[must_use]
+    pub fn sample_rate(cx: &App) -> Option<u32> {
+        cx.global::<Self>()
+            .inner
+            .as_ref()
+            .and_then(|player| player.sample_capture().sample_rate())
+    }
 }
 
 fn current_song(cx: &App) -> Option<&Song> {

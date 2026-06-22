@@ -10,3 +10,4 @@ pub mod sidebar;
 pub mod theme_picker_dialog;
 pub mod toolbar;
 pub mod ui;
+pub mod visualizer_settings_dialog;

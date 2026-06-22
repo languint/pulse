@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 rodio = { version = "0.22", default-features = true }
+rustfft = "6"
+num-complex = "0.4"
 thiserror.workspace = true
 tracing.workspace = true
 

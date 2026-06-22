@@ -278,10 +278,11 @@ fn apply_settings(cx: &mut App, draft: &PulseSettings) {
 
     if draft.theme != previous.theme {
         pulse::set_theme(cx, &draft.theme);
-    } else if draft.library == previous.library && draft.interface != previous.interface {
-        let paths = cx.global::<DataPaths>().clone();
-        if let Err(error) = persist_settings(&paths, &cx.global::<PulseConfig>().to_settings()) {
-            tracing::error!(%error, "failed to save settings");
-        }
     }
+
+    let paths = cx.global::<DataPaths>().clone();
+    if let Err(error) = persist_settings(&paths, &cx.global::<PulseConfig>().to_settings()) {
+        tracing::error!(%error, "failed to save settings");
+    }
+    cx.refresh_windows();
 }

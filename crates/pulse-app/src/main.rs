@@ -19,12 +19,15 @@ pub mod theme_list;
 
 use actions::{
     CommandPaletteTab, ManageLibraryRoots, MediaNextTrack, MediaPlayPause, MediaPreviousTrack,
-    OpenSettings, Quit, ToggleCommandPalette, ToggleFullscreen,
+    OpenSettings, OpenVisualizerSettings, Quit, ShowOscilloscopeVisualizer,
+    ShowSpectrumVisualizer, ToggleCommandPalette, ToggleFullscreen,
 };
 use components::{
     command_palette, library_roots_dialog::open_library_roots_dialog,
-    pulse::Pulse, settings_dialog::open_settings_dialog,
+    pulse::{ActivePulse, Pulse}, settings_dialog::open_settings_dialog,
+    visualizer_settings_dialog::open_visualizer_settings_dialog,
 };
+use pulse_data::VisualizerMode;
 use pulse_keymap::KeymapAction;
 
 use crate::config::PulseConfig;
@@ -111,6 +114,24 @@ fn main() {
                 }
             });
 
+            cx.on_action(|_: &OpenVisualizerSettings, cx| {
+                if let Some(window) = cx.active_window() {
+                    let _ = window.update(cx, |_, window, cx| {
+                        open_visualizer_settings_dialog(window, cx);
+                    });
+                }
+            });
+
+            cx.on_action(|action: &ShowSpectrumVisualizer, cx| {
+                let _ = action;
+                open_visualizer_mode_from_menu(VisualizerMode::Spectrum, cx);
+            });
+
+            cx.on_action(|action: &ShowOscilloscopeVisualizer, cx| {
+                let _ = action;
+                open_visualizer_mode_from_menu(VisualizerMode::Oscilloscope, cx);
+            });
+
             cx.on_action(|_: &Quit, cx| {
                 cx.quit();
             });
@@ -142,6 +163,7 @@ fn main() {
                 if let Err(e) = cx.open_window(window_options, |window, cx| {
                     media_controls::init(window, cx);
                     let pulse = cx.new(|cx| Pulse::new(window, cx));
+                    ActivePulse::set_global(cx, ActivePulse(pulse.clone()));
                     let focus_handle = pulse.read(cx).focus_handle.clone();
                     window.focus(&focus_handle, cx);
                     cx.new(|cx| Root::new(pulse, window, cx))
@@ -152,4 +174,13 @@ fn main() {
             })
             .detach();
         });
+}
+
+fn open_visualizer_mode_from_menu(mode: VisualizerMode, cx: &mut gpui::App) {
+    if let Some(active) = cx.try_global::<ActivePulse>() {
+        let pulse = active.0.clone();
+        pulse.update(cx, |pulse, cx| {
+            pulse.show_visualizer_mode(mode, cx);
+        });
+    }
 }

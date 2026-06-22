@@ -6,6 +6,153 @@ pub const DEFAULT_THEME: &str = "Pulse Dark";
 pub const THEME_PULSE_DARK: &str = "Pulse Dark";
 pub const THEME_PULSE_LIGHT: &str = "Pulse Light";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum VisualizerMode {
+    #[default]
+    Spectrum,
+    Oscilloscope,
+}
+
+impl VisualizerMode {
+    pub const ALL: [Self; 2] = [Self::Spectrum, Self::Oscilloscope];
+
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Spectrum => "Spectrum",
+            Self::Oscilloscope => "Oscilloscope",
+        }
+    }
+
+    #[must_use]
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Spectrum => "Smooth frequency wave",
+            Self::Oscilloscope => "Time-domain waveform",
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for VisualizerMode {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        Ok(match value.as_str() {
+            "oscilloscope" => Self::Oscilloscope,
+            "spectrum" => Self::Spectrum,
+            // Migrate saved spectrogram preference to spectrum.
+            "spectrogram" => Self::Spectrum,
+            _ => Self::default(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum VisualizerQuality {
+    #[default]
+    Efficient,
+    Balanced,
+    High,
+    Ultra,
+}
+
+impl VisualizerQuality {
+    pub const ALL: [Self; 4] = [Self::Efficient, Self::Balanced, Self::High, Self::Ultra];
+
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Efficient => "Efficient",
+            Self::Balanced => "Balanced",
+            Self::High => "High",
+            Self::Ultra => "Ultra",
+        }
+    }
+
+    #[must_use]
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Efficient => "Lightweight — minimal CPU use",
+            Self::Balanced => "Smoother motion and finer detail",
+            Self::High => "Large FFT with multi-pass analysis",
+            Self::Ultra => "Maximum detail — highest CPU use",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct VisualizerSettings {
+    #[serde(default)]
+    pub mode: VisualizerMode,
+
+    #[serde(default)]
+    pub quality: VisualizerQuality,
+
+    #[serde(default = "default_true")]
+    pub peak_hold: bool,
+
+    #[serde(default = "default_true")]
+    pub mirror: bool,
+
+    #[serde(default = "default_true")]
+    pub gradient: bool,
+}
+
+impl Default for VisualizerSettings {
+    fn default() -> Self {
+        Self {
+            mode: VisualizerMode::default(),
+            quality: VisualizerQuality::default(),
+            peak_hold: default_true(),
+            mirror: default_true(),
+            gradient: default_true(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedVisualizerSettings {
+    pub mode: VisualizerMode,
+    pub fft_size: usize,
+    pub bar_count: usize,
+    pub refresh_ms: u64,
+    pub fft_passes: u32,
+    pub attack: f32,
+    pub decay: f32,
+    pub peak_decay: f32,
+    pub peak_hold: bool,
+    pub mirror: bool,
+    pub gradient: bool,
+}
+
+impl VisualizerSettings {
+    #[must_use]
+    pub fn resolve(&self) -> ResolvedVisualizerSettings {
+        let (fft_size, bar_count, refresh_ms, fft_passes, attack, decay, peak_decay) =
+            match self.quality {
+                VisualizerQuality::Efficient => (1024, 96, 16, 1, 0.50, 0.12, 0.94),
+                VisualizerQuality::Balanced => (2048, 128, 8, 2, 0.55, 0.10, 0.95),
+                VisualizerQuality::High => (4096, 192, 8, 4, 0.60, 0.08, 0.96),
+                VisualizerQuality::Ultra => (4096, 256, 8, 4, 0.65, 0.06, 0.97),
+            };
+
+        ResolvedVisualizerSettings {
+            mode: self.mode,
+            fft_size,
+            bar_count,
+            refresh_ms,
+            fft_passes,
+            attack,
+            decay,
+            peak_decay,
+            peak_hold: self.peak_hold,
+            mirror: self.mirror,
+            gradient: self.gradient,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct InterfaceSettings {
     #[serde(default = "default_aggressively_prefetch_artwork")]
@@ -30,6 +177,9 @@ pub struct PulseSettings {
 
     #[serde(default)]
     pub interface: InterfaceSettings,
+
+    #[serde(default)]
+    pub visualizer: VisualizerSettings,
 }
 
 impl Default for PulseSettings {
@@ -38,6 +188,7 @@ impl Default for PulseSettings {
             theme: default_theme(),
             library: LibraryConfig::default(),
             interface: InterfaceSettings::default(),
+            visualizer: VisualizerSettings::default(),
         }
     }
 }
@@ -86,6 +237,10 @@ const fn default_aggressively_prefetch_artwork() -> bool {
     true
 }
 
+const fn default_true() -> bool {
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,6 +259,13 @@ mod tests {
             interface: InterfaceSettings {
                 aggressively_prefetch_artwork: false,
             },
+            visualizer: VisualizerSettings {
+                mode: VisualizerMode::Oscilloscope,
+                quality: VisualizerQuality::Ultra,
+                peak_hold: false,
+                mirror: false,
+                gradient: true,
+            },
         };
 
         settings.save(&paths)?;
@@ -113,5 +275,20 @@ mod tests {
             return Err("settings mismatch after round trip".into());
         }
         Ok(())
+    }
+
+    #[test]
+    fn ultra_quality_is_heavier_than_efficient() {
+        let efficient = VisualizerSettings::default().resolve();
+        let ultra = VisualizerSettings {
+            quality: VisualizerQuality::Ultra,
+            ..VisualizerSettings::default()
+        }
+        .resolve();
+
+        assert!(ultra.fft_size >= efficient.fft_size);
+        assert!(ultra.bar_count > efficient.bar_count);
+        assert!(ultra.fft_passes > efficient.fft_passes);
+        assert!(ultra.refresh_ms <= efficient.refresh_ms);
     }
 }

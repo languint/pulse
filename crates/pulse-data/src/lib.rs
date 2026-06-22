@@ -11,4 +11,7 @@ pub use overrides::{
     album_user_labels, artist_override_key, artist_user_labels, song_override_key,
 };
 pub use paths::PulsePaths;
-pub use settings::{DEFAULT_THEME, InterfaceSettings, PulseSettings, THEME_PULSE_DARK, THEME_PULSE_LIGHT};
+pub use settings::{
+    DEFAULT_THEME, InterfaceSettings, PulseSettings, ResolvedVisualizerSettings,
+    THEME_PULSE_DARK, THEME_PULSE_LIGHT, VisualizerMode, VisualizerQuality, VisualizerSettings,
+};

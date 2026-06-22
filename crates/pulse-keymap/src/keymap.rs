@@ -73,14 +73,8 @@ fn default_bindings() -> HashMap<KeymapAction, Vec<String>> {
             KeymapAction::MediaPreviousTrack,
             vec!["[".into(), "mediaprevtrack".into(), "xf86audioprev".into()],
         ),
-        (
-            KeymapAction::ToggleCommandPalette,
-            vec!["ctrl-p".into()],
-        ),
-        (
-            KeymapAction::OpenCommandPalette,
-            vec!["tab".into()],
-        ),
+        (KeymapAction::ToggleCommandPalette, vec!["ctrl-p".into()]),
+        (KeymapAction::OpenCommandPalette, vec!["tab".into()]),
     ])
 }
 

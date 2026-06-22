@@ -7,6 +7,9 @@ use std::time::Duration;
 
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
 
+use crate::sample_capture::SampleCapture;
+use crate::sample_tap::SampleTap;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PlayerError {
     #[error("failed to open audio output: {0}")]
@@ -59,6 +62,7 @@ enum Command {
 pub struct PlayerHandle {
     command_tx: Sender<Command>,
     snapshot: Arc<Mutex<PlayerSnapshot>>,
+    sample_capture: Arc<SampleCapture>,
     _thread: JoinHandle<()>,
 }
 
@@ -68,19 +72,27 @@ impl PlayerHandle {
     /// Returns an error when the audio output device cannot be opened.
     pub fn new() -> Result<Self, PlayerError> {
         let snapshot = Arc::new(Mutex::new(PlayerSnapshot::default()));
+        let sample_capture = Arc::new(SampleCapture::default());
         let (command_tx, command_rx) = mpsc::channel();
         let thread_snapshot = snapshot.clone();
+        let thread_capture = sample_capture.clone();
 
         let thread = thread::Builder::new()
             .name("pulse-audio".into())
-            .spawn(move || audio_thread_main(command_rx, thread_snapshot))
+            .spawn(move || audio_thread_main(command_rx, thread_snapshot, thread_capture))
             .map_err(|error| PlayerError::Output(error.to_string()))?;
 
         Ok(Self {
             command_tx,
             snapshot,
+            sample_capture,
             _thread: thread,
         })
+    }
+
+    #[must_use]
+    pub fn sample_capture(&self) -> Arc<SampleCapture> {
+        self.sample_capture.clone()
     }
 
     #[must_use]
@@ -133,6 +145,7 @@ struct AudioThread {
     current_index: Option<usize>,
     state: PlaybackState,
     playhead_offset_ms: u64,
+    sample_capture: Arc<SampleCapture>,
 }
 
 impl AudioThread {
@@ -202,10 +215,11 @@ impl AudioThread {
         let decoder = Decoder::try_from(file).map_err(|_| PlayerError::Decode {
             path: track.path.clone(),
         })?;
+        let tapped = SampleTap::new(decoder, self.sample_capture.clone());
 
         let seek_ms = seek_ms.min(u64::from(track.duration_ms));
 
-        self.player.append(decoder);
+        self.player.append(tapped);
         self.player.pause();
 
         if seek_ms > 0
@@ -354,7 +368,11 @@ impl AudioThread {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn audio_thread_main(command_rx: Receiver<Command>, snapshot: Arc<Mutex<PlayerSnapshot>>) {
+fn audio_thread_main(
+    command_rx: Receiver<Command>,
+    snapshot: Arc<Mutex<PlayerSnapshot>>,
+    sample_capture: Arc<SampleCapture>,
+) {
     let device_sink = match DeviceSinkBuilder::open_default_sink() {
         Ok(sink) => sink,
         Err(error) => {
@@ -371,6 +389,7 @@ fn audio_thread_main(command_rx: Receiver<Command>, snapshot: Arc<Mutex<PlayerSn
         current_index: None,
         state: PlaybackState::Stopped,
         playhead_offset_ms: 0,
+        sample_capture,
     };
 
     loop {

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gpui::{
-    AppContext, Bounds, Context, DragMoveEvent, Empty, FocusHandle, InteractiveElement,
+    AppContext, Bounds, Context, DragMoveEvent, Empty, Entity, FocusHandle, InteractiveElement,
     MouseButton, MouseDownEvent, MouseUpEvent, ParentElement, Pixels, Point, Render,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px, relative,
 };
@@ -12,6 +12,7 @@ use gpui_component::{
 };
 
 use crate::components::pages::{artwork_tile_content, format_duration_ms};
+use crate::components::pulse::Pulse;
 use crate::library::LibraryScanState;
 use crate::media_controls;
 use crate::player::PulsePlayer;
@@ -73,6 +74,7 @@ fn fraction_from_position(position: Point<Pixels>, bounds: Bounds<Pixels>) -> f3
 }
 
 pub struct PlayerBar {
+    pulse: Entity<Pulse>,
     focus_handle: FocusHandle,
     seek_bounds: Bounds<Pixels>,
     pointer_down: bool,
@@ -82,7 +84,7 @@ pub struct PlayerBar {
 }
 
 impl PlayerBar {
-    pub fn new(cx: &mut Context<Self>) -> Self {
+    pub fn new(pulse: Entity<Pulse>, cx: &mut Context<Self>) -> Self {
         let entity = cx.entity();
         cx.spawn(async move |_, cx| {
             loop {
@@ -101,6 +103,7 @@ impl PlayerBar {
         .detach();
 
         Self {
+            pulse,
             focus_handle: cx.focus_handle(),
             seek_bounds: Bounds::default(),
             pointer_down: false,
@@ -178,6 +181,7 @@ impl Render for PlayerBar {
         let duration_label = duration_label_ms(snapshot.duration_ms);
         let is_playing = PulsePlayer::is_playing(cx);
         let progress = progress_fraction(snapshot.position_ms, snapshot.duration_ms);
+        let visualizer_active = self.pulse.read(cx).is_visualizer();
         let (border, background, muted_foreground) = {
             let theme = cx.theme();
             (theme.border, theme.background, theme.muted_foreground)
@@ -259,7 +263,33 @@ impl Render for PlayerBar {
                                     ),
                             ),
                     )
-                    .child(div().flex_1().min_w_0()),
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .justify_end()
+                            .items_center()
+                            .gap_1()
+                            .px_4()
+                            .child(
+                                Button::new("player-visualizer")
+                                    .ghost()
+                                    .icon(IconName::ChartPie)
+                                    .tooltip("Visualizer")
+                                    .map(|button| {
+                                        if visualizer_active {
+                                            button.primary()
+                                        } else {
+                                            button
+                                        }
+                                    })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.pulse.update(cx, |pulse, cx| {
+                                            pulse.toggle_visualizer(cx);
+                                        });
+                                    })),
+                            ),
+                    ),
             )
     }
 }
